@@ -2,7 +2,11 @@ name: Build APK
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -16,14 +20,44 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Build debug APK
+
+      - name: Prepare signing key (optional)
+        env:
+          KS: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          gradle assembleDebug --stacktrace || {
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "SIGNED=true" >> "$GITHUB_ENV"
+          else
+            echo "No KEYSTORE_BASE64 secret found - building with the debug key (updates over older installs may need uninstall first)."
+          fi
+
+      - name: Build APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          APP_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          TASK=assembleDebug
+          if [ "$SIGNED" = "true" ]; then TASK=assembleRelease; fi
+          gradle $TASK --stacktrace || {
             echo "Retrying without the optional LAME dependency (MP3 option falls back to tagged M4A)"
             sed -i '/TAndroidLame/d' app/build.gradle.kts
-            gradle assembleDebug --stacktrace
+            gradle $TASK --stacktrace
           }
+          mkdir -p out
+          cp app/build/outputs/apk/*/*.apk out/SaavnDL.apk
+
       - uses: actions/upload-artifact@v4
         with:
-          name: SaavnDL-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: SaavnDL-apk
+          path: out/SaavnDL.apk
+
+      - name: Publish GitHub Release (tags only)
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/SaavnDL.apk
+          generate_release_notes: true
