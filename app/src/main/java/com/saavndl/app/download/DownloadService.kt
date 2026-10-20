@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 class DownloadService : Service() {
@@ -31,7 +32,7 @@ class DownloadService : Service() {
         startForeground(ID, build("Preparing downloads…", 0, 0, true), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         baselineDone = Downloads.tasks.value.count { it.status == DlStatus.DONE }
         scope.launch {
-            Downloads.tasks.collect { list ->
+            combine(Downloads.tasks, Downloads.paused) { l, p -> l to p }.collect { (list, paused) ->
                 val active = list.count { it.active }
                 val done = list.count { it.status == DlStatus.DONE }
                 if (active == 0) {
@@ -50,7 +51,8 @@ class DownloadService : Service() {
                     val finished = list.size - active
                     val cur = list.firstOrNull { it.status == DlStatus.DOWNLOADING || it.status == DlStatus.PROCESSING }
                     val text = cur?.song?.name ?: "Waiting…"
-                    nm.notify(ID, build("Downloading $finished/${list.size}  ·  $text", list.size, finished, false))
+                    val head = if (paused) "Paused" else "Downloading"
+                    nm.notify(ID, build("$head $finished/${list.size}  ·  $text", list.size, finished, false))
                 }
             }
         }

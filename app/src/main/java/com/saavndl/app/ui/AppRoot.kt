@@ -1,5 +1,7 @@
 package com.saavndl.app.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +12,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -20,6 +23,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -33,11 +37,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import com.saavndl.app.data.tr
 import com.saavndl.app.download.Downloads
 import kotlinx.coroutines.launch
 
 @Composable
 fun AppRoot(vm: AppVM, incoming: String?, onConsumed: () -> Unit) {
+    val ctx = LocalContext.current
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val stack = remember { mutableStateListOf<Route>() }
     val snack = remember { SnackbarHostState() }
@@ -45,7 +52,7 @@ fun AppRoot(vm: AppVM, incoming: String?, onConsumed: () -> Unit) {
     val host = remember {
         Host(
             snack = { m -> scope.launch { snack.currentSnackbarData?.dismiss(); snack.showSnackbar(m) } },
-            push = { stack.add(it) }
+            push = { r -> if (stack.lastOrNull() != r) stack.add(r) }
         )
     }
     val tasks by Downloads.tasks.collectAsState()
@@ -54,6 +61,7 @@ fun AppRoot(vm: AppVM, incoming: String?, onConsumed: () -> Unit) {
     LaunchedEffect(incoming) {
         if (incoming != null) { openLink(host, incoming); onConsumed() }
     }
+    LaunchedEffect(Unit) { vm.checkUpdate(ctx, false) }
     BackHandler(enabled = stack.isNotEmpty()) { stack.removeAt(stack.lastIndex) }
 
     CompositionLocalProvider(LocalHost provides host) {
@@ -65,17 +73,17 @@ fun AppRoot(vm: AppVM, incoming: String?, onConsumed: () -> Unit) {
                     MiniPlayer()
                     NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
                         NavigationBarItem(selected = tab == 0, onClick = { stack.clear(); tab = 0 },
-                            icon = { Icon(Icons.Filled.Search, null) }, label = { Text("Discover") })
+                            icon = { Icon(Icons.Filled.Search, null) }, label = { Text(tr("Discover")) })
                         NavigationBarItem(selected = tab == 1, onClick = { stack.clear(); tab = 1 },
-                            icon = { Icon(Icons.Filled.LibraryMusic, null) }, label = { Text("Library") })
+                            icon = { Icon(Icons.Filled.LibraryMusic, null) }, label = { Text(tr("Library")) })
                         NavigationBarItem(selected = tab == 2, onClick = { stack.clear(); tab = 2 },
                             icon = {
                                 BadgedBox(badge = { if (activeCount > 0) Badge { Text("$activeCount") } }) {
                                     Icon(Icons.Filled.CloudDownload, null)
                                 }
-                            }, label = { Text("Downloads") })
+                            }, label = { Text(tr("Downloads")) })
                         NavigationBarItem(selected = tab == 3, onClick = { stack.clear(); tab = 3 },
-                            icon = { Icon(Icons.Filled.Settings, null) }, label = { Text("Settings") })
+                            icon = { Icon(Icons.Filled.Settings, null) }, label = { Text(tr("Settings")) })
                     }
                 }
             }
@@ -83,7 +91,14 @@ fun AppRoot(vm: AppVM, incoming: String?, onConsumed: () -> Unit) {
             Box(Modifier.padding(pad).fillMaxSize()) {
                 if (stack.isNotEmpty()) {
                     val r = stack.last()
-                    key(r) { DetailScreen(r) { stack.removeAt(stack.lastIndex) } }
+                    val back = { stack.removeAt(stack.lastIndex); Unit }
+                    key(r) {
+                        when (r) {
+                            is Route.NowPlaying -> NowPlayingScreen(back)
+                            is Route.Playlist -> PlaylistScreen(r.id, back)
+                            else -> DetailScreen(r, back)
+                        }
+                    }
                 } else when (tab) {
                     0 -> SearchScreen(vm)
                     1 -> LibraryScreen()
@@ -91,6 +106,21 @@ fun AppRoot(vm: AppVM, incoming: String?, onConsumed: () -> Unit) {
                     else -> SettingsScreen(vm)
                 }
             }
+        }
+
+        vm.update?.let { u ->
+            AlertDialog(
+                onDismissRequest = { vm.update = null },
+                title = { Text("Update ${u.tag} available") },
+                text = { Text(u.notes.ifBlank { "A new version of SaavnDL is ready to download." }) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        vm.update = null
+                    }) { Text("Download") }
+                },
+                dismissButton = { TextButton(onClick = { vm.update = null }) { Text("Later") } }
+            )
         }
     }
 }

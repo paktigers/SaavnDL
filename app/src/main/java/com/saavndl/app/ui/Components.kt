@@ -10,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +45,8 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -83,6 +86,7 @@ import com.saavndl.app.data.Song
 import com.saavndl.app.data.Stores
 import com.saavndl.app.data.compactNum
 import com.saavndl.app.data.fmtDur
+import com.saavndl.app.data.tr
 import com.saavndl.app.download.Downloads
 import com.saavndl.app.player.PlayerController
 import com.saavndl.app.player.toTrack
@@ -91,6 +95,8 @@ import com.saavndl.app.player.toTrack
 sealed class Route {
     data class Detail(val kind: Kind, val id: String?, val link: String?, val title: String, val image: String) : Route()
     data class Similar(val song: Song) : Route()
+    object NowPlaying : Route()
+    data class Playlist(val id: String) : Route()
 }
 
 class Host(val snack: (String) -> Unit, val push: (Route) -> Unit)
@@ -154,9 +160,9 @@ fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, title: Str
             Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
         }
         Spacer(Modifier.height(16.dp))
-        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(tr(title), style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(6.dp))
-        Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(tr(body), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 
@@ -177,7 +183,8 @@ fun ErrorState(message: String, onRetry: () -> Unit) {
 fun SongRow(
     song: Song, selected: Boolean, isCurrent: Boolean, playing: Boolean, fav: Boolean,
     onClick: () -> Unit, onLong: () -> Unit, onDownload: () -> Unit, onFav: () -> Unit,
-    onInfo: () -> Unit, onSimilar: () -> Unit, onShare: () -> Unit, onCopy: () -> Unit
+    onInfo: () -> Unit, onSimilar: () -> Unit, onShare: () -> Unit, onCopy: () -> Unit,
+    onAddPlaylist: () -> Unit, onPlayNext: () -> Unit, onQueue: () -> Unit
 ) {
     var menu by remember { mutableStateOf(false) }
     val bg = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = .6f) else Color.Transparent
@@ -212,10 +219,13 @@ fun SongRow(
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Song info") }, leadingIcon = { Icon(Icons.Filled.Info, null) }, onClick = { menu = false; onInfo() })
-                DropdownMenuItem(text = { Text("Similar songs") }, leadingIcon = { Icon(Icons.Filled.Layers, null) }, onClick = { menu = false; onSimilar() })
-                DropdownMenuItem(text = { Text("Share link") }, leadingIcon = { Icon(Icons.Filled.Share, null) }, onClick = { menu = false; onShare() })
-                DropdownMenuItem(text = { Text("Copy link") }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = { menu = false; onCopy() })
+                DropdownMenuItem(text = { Text(tr("Add to playlist")) }, leadingIcon = { Icon(Icons.Filled.PlaylistAdd, null) }, onClick = { menu = false; onAddPlaylist() })
+                DropdownMenuItem(text = { Text(tr("Play next")) }, leadingIcon = { Icon(Icons.Filled.SkipNext, null) }, onClick = { menu = false; onPlayNext() })
+                DropdownMenuItem(text = { Text(tr("Add to queue")) }, leadingIcon = { Icon(Icons.Filled.QueueMusic, null) }, onClick = { menu = false; onQueue() })
+                DropdownMenuItem(text = { Text(tr("Song info")) }, leadingIcon = { Icon(Icons.Filled.Info, null) }, onClick = { menu = false; onInfo() })
+                DropdownMenuItem(text = { Text(tr("Similar songs")) }, leadingIcon = { Icon(Icons.Filled.Layers, null) }, onClick = { menu = false; onSimilar() })
+                DropdownMenuItem(text = { Text(tr("Share link")) }, leadingIcon = { Icon(Icons.Filled.Share, null) }, onClick = { menu = false; onShare() })
+                DropdownMenuItem(text = { Text(tr("Copy link")) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = { menu = false; onCopy() })
             }
         }
     }
@@ -225,7 +235,7 @@ fun SongRow(
 fun SongInfoDialog(s: Song, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(tr("Close")) } },
         title = { Text(s.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -264,6 +274,7 @@ fun SongsList(
     val cur by PlayerController.current.collectAsState()
     val playing by PlayerController.playing.collectAsState()
     var info by remember { mutableStateOf<Song?>(null) }
+    var addTo by remember { mutableStateOf<List<Song>?>(null) }
     val state = rememberLazyListState()
     val lastVisible by remember { derivedStateOf { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 } }
     LaunchedEffect(lastVisible, songs.size) {
@@ -284,6 +295,7 @@ fun SongsList(
                     IconButton(onClick = { sel.clear() }) { Icon(Icons.Filled.Close, "Cancel selection") }
                     Text("${sel.ids.size} selected", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                     IconButton(onClick = { sel.ids.clear(); sel.ids.addAll(songs.indices.toList()) }) { Icon(Icons.Filled.SelectAll, "Select all") }
+                    IconButton(onClick = { addTo = sel.ids.sorted().map { songs[it] }; sel.clear() }) { Icon(Icons.Filled.PlaylistAdd, "Add to playlist") }
                     IconButton(onClick = { download(sel.ids.sorted()); sel.clear() }) { Icon(Icons.Filled.Download, "Download selected") }
                 }
             }
@@ -304,6 +316,9 @@ fun SongsList(
                     onFav = { Stores.toggleFavorite(s) },
                     onInfo = { info = s },
                     onSimilar = { host.push(Route.Similar(s)) },
+                    onAddPlaylist = { addTo = listOf(s) },
+                    onPlayNext = { PlayerController.playNext(s.toTrack()); host.snack("Will play next") },
+                    onQueue = { PlayerController.addToQueue(s.toTrack()); host.snack("Added to queue") },
                     onShare = { shareText(ctx, "${s.name} - ${s.artists}\n${s.url}") },
                     onCopy = {
                         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -316,11 +331,13 @@ fun SongsList(
         }
     }
     info?.let { SongInfoDialog(it) { info = null } }
+    addTo?.let { AddToPlaylistDialog(it) { addTo = null } }
 }
 
 // ------------------------------------------------------------------ mini player
 @Composable
 fun MiniPlayer() {
+    val host = LocalHost.current
     val t by PlayerController.current.collectAsState()
     val playing by PlayerController.playing.collectAsState()
     val loading by PlayerController.loading.collectAsState()
@@ -333,7 +350,7 @@ fun MiniPlayer() {
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
         ) {
-            Column {
+            Column(Modifier.clickable { host.push(Route.NowPlaying) }) {
                 Row(Modifier.padding(start = 10.dp, end = 4.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Cover(tr.image, 42.dp, radius = 10.dp)
                     Spacer(Modifier.width(10.dp))

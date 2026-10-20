@@ -4,6 +4,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val ksFile: String? = System.getenv("KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
+
 android {
     namespace = "com.saavndl.app"
     compileSdk = 35
@@ -12,12 +14,24 @@ android {
         applicationId = "com.saavndl.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toIntOrNull() ?: 1
+        versionName = System.getenv("APP_VERSION")?.removePrefix("v")?.takeIf { it.isNotBlank() } ?: "1.0.0"
+    }
+
+    signingConfigs {
+        if (ksFile != null) {
+            create("release") {
+                storeFile = file(ksFile)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = if (ksFile != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

@@ -1,5 +1,6 @@
 package com.saavndl.app.ui
 
+import com.saavndl.app.data.tr
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -72,6 +73,7 @@ fun DetailScreen(route: Route, onBack: () -> Unit) {
                         route.song.id, Kind.SONGS, "Similar to ${route.song.name}", route.song.artists,
                         route.song.image, SaavnApi.similar(route.song.id)
                     )
+                    else -> throw IllegalStateException("Unsupported route")
                 }
             )
         } catch (e: CancellationException) {
@@ -80,7 +82,7 @@ fun DetailScreen(route: Route, onBack: () -> Unit) {
             DState.Err(e.message ?: "Failed to load")
         }
     }
-    val title = when (route) { is Route.Detail -> route.title; is Route.Similar -> "Similar songs" }
+    val title = when (route) { is Route.Detail -> route.title; is Route.Similar -> "Similar songs"; else -> "" }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -99,6 +101,7 @@ fun DetailScreen(route: Route, onBack: () -> Unit) {
 private fun DetailBody(d: Detail) {
     val scope = rememberCoroutineScope()
     val host = LocalHost.current
+    val ctx = LocalContext.current
     var tab by remember { mutableIntStateOf(0) }
     var more by remember { mutableStateOf<List<Song>>(emptyList()) }
     var moreLoading by remember { mutableStateOf(false) }
@@ -127,6 +130,24 @@ private fun DetailBody(d: Detail) {
     }
     LaunchedEffect(tab) { if (isArtist && tab == 2 && more.isEmpty()) loadMore() }
 
+    fun downloadAllAlbums() {
+        scope.launch {
+            host.snack("Fetching ${d.albums.size} albums…")
+            var n = 0
+            for (a in d.albums) {
+                try {
+                    val det = SaavnApi.loadDetail(Kind.ALBUMS, a.id, null)
+                    Downloads.enqueue(ctx, det.songs, FileNames.clean(det.name), det.songs.indices.map { it + 1 }, det.songs.size)
+                    n += det.songs.size
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                }
+            }
+            host.snack("Added $n songs to the queue")
+        }
+    }
+
     val songs = if (isArtist && tab == 2) more else d.songs
     val header: @Composable () -> Unit = {
         Column {
@@ -138,6 +159,11 @@ private fun DetailBody(d: Detail) {
     if (isArtist && tab == 1) {
         LazyColumn(Modifier.fillMaxSize()) {
             item { header() }
+            if (d.albums.isNotEmpty()) item {
+                FilledTonalButton(onClick = { downloadAllAlbums() }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Icon(Icons.Filled.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Download all albums (${d.albums.size})")
+                }
+            }
             items(d.albums) { c -> CollRow(c) { host.push(Route.Detail(Kind.ALBUMS, c.id, null, c.name, c.image)) } }
         }
     } else {
@@ -174,9 +200,9 @@ private fun Header(d: Detail, songs: List<Song>, numbered: Boolean, sub: String)
                 if (songs.isEmpty()) return@Button
                 Downloads.enqueue(ctx, songs, sub, if (numbered) songs.indices.map { it + 1 } else null, if (numbered) songs.size else 0)
                 host.snack("Added ${songs.size} songs to queue")
-            }) { Icon(Icons.Filled.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Download all") }
+            }) { Icon(Icons.Filled.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(tr("Download all")) }
             FilledTonalButton(onClick = { if (songs.isNotEmpty()) PlayerController.playQueue(songs.map { it.toTrack() }, 0) }) {
-                Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Play")
+                Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text(tr("Play"))
             }
             IconButton(onClick = {
                 try {

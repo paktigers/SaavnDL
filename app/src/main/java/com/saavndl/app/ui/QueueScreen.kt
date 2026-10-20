@@ -38,28 +38,34 @@ import androidx.compose.ui.unit.dp
 import com.saavndl.app.download.DlStatus
 import com.saavndl.app.download.DlTask
 import com.saavndl.app.download.Downloads
+import com.saavndl.app.data.tr
 
 @Composable
 fun QueueScreen() {
     val ctx = LocalContext.current
     val tasks by Downloads.tasks.collectAsState()
+    val paused by Downloads.paused.collectAsState()
     val active = tasks.count { it.active }
     val done = tasks.count { it.status == DlStatus.DONE || it.status == DlStatus.SKIPPED }
     val failed = tasks.count { it.status == DlStatus.FAILED || it.status == DlStatus.CANCELLED }
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp)) {
-            Text("Downloads", style = MaterialTheme.typography.headlineMedium)
-            Text("$active active · $done finished · $failed failed", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(tr("Downloads"), style = MaterialTheme.typography.headlineMedium)
+            Text((if (paused) "Paused · " else "") + "$active active · $done finished · $failed failed", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (tasks.isEmpty()) {
             EmptyState(Icons.Filled.CloudDownload, "Queue is empty", "Tap the download icon on any song to add it here.")
             return@Column
         }
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (active > 0) AssistChip(onClick = { Downloads.cancelAll() }, label = { Text("Cancel all") })
-            if (failed > 0) AssistChip(onClick = { Downloads.retryFailed(ctx) }, label = { Text("Retry failed") })
-            if (done + failed > 0) AssistChip(onClick = { Downloads.clearFinished() }, label = { Text("Clear finished") })
+            if (active > 0 || paused) AssistChip(
+                onClick = { Downloads.setPaused(!paused) },
+                label = { Text(if (paused) tr("Resume") else tr("Pause all")) }
+            )
+            if (active > 0) AssistChip(onClick = { Downloads.cancelAll() }, label = { Text(tr("Cancel all")) })
+            if (failed > 0) AssistChip(onClick = { Downloads.retryFailed(ctx) }, label = { Text(tr("Retry failed")) })
+            if (done + failed > 0) AssistChip(onClick = { Downloads.clearFinished() }, label = { Text(tr("Clear finished")) })
         }
         LazyColumn(Modifier.fillMaxSize()) {
             items(tasks.reversed(), key = { it.id }) { TaskRow(it) }
@@ -86,7 +92,7 @@ private fun TaskRow(t: DlTask) {
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
             val label = when (t.status) {
-                DlStatus.QUEUED -> "Waiting in queue"
+                DlStatus.QUEUED -> t.message.ifBlank { "Waiting in queue" }
                 else -> t.message.ifBlank { t.status.name.lowercase().replaceFirstChar { it.uppercase() } }
             }
             Text(label, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = color)

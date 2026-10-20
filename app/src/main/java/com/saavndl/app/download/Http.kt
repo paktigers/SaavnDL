@@ -9,7 +9,7 @@ import java.net.URL
 import kotlin.coroutines.coroutineContext
 
 object Http {
-    suspend fun download(url: String, dest: File, onProgress: (Float) -> Unit = {}) {
+    suspend fun download(url: String, dest: File, onProgress: (Float) -> Unit = {}, gate: suspend () -> Unit = {}) {
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 15000
         c.readTimeout = 30000
@@ -23,6 +23,7 @@ object Http {
                     var read = 0L
                     while (true) {
                         coroutineContext.ensureActive()
+                        gate()
                         val n = ins.read(buf)
                         if (n < 0) break
                         outs.write(buf, 0, n)

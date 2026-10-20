@@ -68,6 +68,17 @@ object MediaSaver {
         }
     }
 
+    fun saveToDownloads(ctx: Context, name: String, mime: String, bytes: ByteArray) {
+        val r = ctx.contentResolver
+        val v = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/SaavnDL/")
+        }
+        val uri = r.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v) ?: throw IOException("Cannot create $name")
+        r.openOutputStream(uri)?.use { it.write(bytes) }
+    }
+
     /** Exports a song list as CSV into Download/SaavnDL. Returns the file name. */
     fun exportCsv(ctx: Context, songs: List<Song>): String {
         val name = "saavn-export-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + ".csv"

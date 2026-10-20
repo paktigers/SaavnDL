@@ -6,7 +6,8 @@ import java.io.File
 data class Meta(
     val title: String, val artist: String, val album: String, val albumArtist: String,
     val year: String, val track: Int, val total: Int, val copyright: String,
-    val label: String, val language: String, val comment: String
+    val label: String, val language: String, val comment: String,
+    val lyrics: String = ""
 )
 
 /** Writes iTunes-style metadata (moov/udta/meta/ilst) incl. cover art into an MP4/M4A without re-encoding. */
@@ -67,6 +68,7 @@ object Mp4Tagger {
         val cmt = listOf(m.label.takeIf { it.isNotBlank() }?.let { "Label: $it" }, m.comment.takeIf { it.isNotBlank() })
             .filterNotNull().joinToString(" | ")
         t("\u00A9cmt", cmt)
+        t("\u00A9lyr", m.lyrics)
         if (m.track > 0) {
             val p = byteArrayOf(0, 0, (m.track shr 8).toByte(), m.track.toByte(), (m.total shr 8).toByte(), m.total.toByte(), 0, 0)
             ilst.write(box("trkn", dataBox(0, p)))
@@ -92,6 +94,19 @@ object Mp4Tagger {
                 for (i in 0 until n) { val o = k.start + 16 + i * 8; putU64(b, o, u64(b, o) + delta) }
             }
         }
+    }
+
+    /** Returns the embedded cover image of an M4A written by this tagger (or any iTunes-style file). */
+    fun extractCover(b: ByteArray): ByteArray? {
+        val moov = readBoxes(b, 0, b.size).firstOrNull { it.type == "moov" } ?: return null
+        val udta = readBoxes(b, moov.start + moov.header, moov.start + moov.size).firstOrNull { it.type == "udta" } ?: return null
+        val meta = readBoxes(b, udta.start + udta.header, udta.start + udta.size).firstOrNull { it.type == "meta" } ?: return null
+        val ilst = readBoxes(b, meta.start + meta.header + 4, meta.start + meta.size).firstOrNull { it.type == "ilst" } ?: return null
+        val covr = readBoxes(b, ilst.start + ilst.header, ilst.start + ilst.size).firstOrNull { it.type == "covr" } ?: return null
+        val data = readBoxes(b, covr.start + covr.header, covr.start + covr.size).firstOrNull { it.type == "data" } ?: return null
+        val from = data.start + data.header + 8
+        val to = data.start + data.size
+        return if (from < to) b.copyOfRange(from, to) else null
     }
 
     fun tag(src: File, dst: File, m: Meta, cover: ByteArray?) {

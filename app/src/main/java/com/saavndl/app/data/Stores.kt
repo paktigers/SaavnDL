@@ -2,11 +2,18 @@ package com.saavndl.app.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.Uri
+import com.saavndl.app.SaavnApp
+import com.saavndl.app.download.Downloads
+import com.saavndl.app.download.MediaSaver
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class AudioFormat(val label: String, val desc: String) {
     ORIGINAL("Original M4A", "Exactly as delivered. No tags, no conversion."),
@@ -23,7 +30,14 @@ data class AppSettings(
     val theme: String = "system",
     val concurrent: Int = 2,
     val nameStyle: Int = 0,
-    val skipExisting: Boolean = true
+    val skipExisting: Boolean = true,
+    val wifiOnly: Boolean = false,
+    val retries: Int = 2,
+    val embedLyrics: Boolean = false,
+    val autoFavDownload: Boolean = false,
+    val lang: String = "en",
+    val repo: String = "",
+    val autoUpdate: Boolean = true
 )
 
 object SettingsStore {
@@ -44,20 +58,35 @@ object SettingsStore {
             theme = sp.getString("theme", d.theme) ?: d.theme,
             concurrent = sp.getInt("concurrent", d.concurrent),
             nameStyle = sp.getInt("nameStyle", d.nameStyle),
-            skipExisting = sp.getBoolean("skipExisting", d.skipExisting)
+            skipExisting = sp.getBoolean("skipExisting", d.skipExisting),
+            wifiOnly = sp.getBoolean("wifiOnly", d.wifiOnly),
+            retries = sp.getInt("retries", d.retries),
+            embedLyrics = sp.getBoolean("embedLyrics", d.embedLyrics),
+            autoFavDownload = sp.getBoolean("autoFavDownload", d.autoFavDownload),
+            lang = sp.getString("lang", d.lang) ?: d.lang,
+            repo = sp.getString("repo", d.repo) ?: d.repo,
+            autoUpdate = sp.getBoolean("autoUpdate", d.autoUpdate)
         )
+        I18n.lang = _state.value.lang
     }
 
     fun update(f: (AppSettings) -> AppSettings) {
         val n = f(_state.value)
         _state.value = n
+        I18n.lang = n.lang
         sp.edit()
             .putString("baseUrl", n.baseUrl).putString("quality", n.quality)
             .putString("format", n.format.name).putBoolean("saveCover", n.saveCover)
             .putInt("limit", n.limit).putString("theme", n.theme)
             .putInt("concurrent", n.concurrent).putInt("nameStyle", n.nameStyle)
-            .putBoolean("skipExisting", n.skipExisting).apply()
+            .putBoolean("skipExisting", n.skipExisting).putBoolean("wifiOnly", n.wifiOnly)
+            .putInt("retries", n.retries).putBoolean("embedLyrics", n.embedLyrics)
+            .putBoolean("autoFavDownload", n.autoFavDownload).putString("lang", n.lang)
+            .putString("repo", n.repo).putBoolean("autoUpdate", n.autoUpdate).apply()
     }
+
+    fun lastUpdateCheck(): Long = sp.getLong("lastUpdateCheck", 0L)
+    fun markUpdateChecked() { sp.edit().putLong("lastUpdateCheck", System.currentTimeMillis()).apply() }
 }
 
 object Recents {
@@ -84,18 +113,41 @@ object Recents {
 
 data class LibItem(
     val songId: String, val title: String, val artist: String, val album: String,
-    val uri: String, val format: String, val thumb: String, val bytes: Long, val time: Long
+    val uri: String, val format: String, val thumb: String, val bytes: Long, val time: Long,
+    val image: String = "", val year: String = "", val label: String = "", val copyright: String = "",
+    val url: String = "", val language: String = "", val albumArtist: String = "",
+    val track: Int = 0, val total: Int = 0
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("songId", songId); put("title", title); put("artist", artist); put("album", album)
         put("uri", uri); put("format", format); put("thumb", thumb); put("bytes", bytes); put("time", time)
+        put("image", image); put("year", year); put("label", label); put("copyright", copyright)
+        put("url", url); put("language", language); put("albumArtist", albumArtist)
+        put("track", track); put("total", total)
     }
 
     companion object {
         fun fromJson(o: JSONObject) = LibItem(
             o.optString("songId"), o.optString("title"), o.optString("artist"), o.optString("album"),
-            o.optString("uri"), o.optString("format"), o.optString("thumb"), o.optLong("bytes"), o.optLong("time")
+            o.optString("uri"), o.optString("format"), o.optString("thumb"), o.optLong("bytes"), o.optLong("time"),
+            o.optString("image"), o.optString("year"), o.optString("label"), o.optString("copyright"),
+            o.optString("url"), o.optString("language"), o.optString("albumArtist"),
+            o.optInt("track"), o.optInt("total")
         )
+    }
+}
+
+data class UserPlaylist(val id: String, val name: String, val songs: List<Song>) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id); put("name", name)
+        val a = JSONArray(); songs.forEach { a.put(it.toJson()) }; put("songs", a)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject): UserPlaylist {
+            val a = o.optJSONArray("songs") ?: JSONArray()
+            return UserPlaylist(o.optString("id"), o.optString("name"), (0 until a.length()).map { Song.fromJson(a.getJSONObject(it)) })
+        }
     }
 }
 
@@ -130,13 +182,84 @@ class JsonListStore<T>(
 object Stores {
     val library = JsonListStore("library.json", { it: LibItem -> it.toJson() }, { LibItem.fromJson(it) })
     val favorites = JsonListStore("favorites.json", { it: Song -> it.toJson() }, { Song.fromJson(it) })
+    val playlists = JsonListStore("playlists.json", { it: UserPlaylist -> it.toJson() }, { UserPlaylist.fromJson(it) })
 
     fun init(ctx: Context) {
         library.init(ctx)
         favorites.init(ctx)
+        playlists.init(ctx)
     }
 
-    fun toggleFavorite(s: Song) = favorites.update { l ->
-        if (l.any { it.id == s.id }) l.filter { it.id != s.id } else listOf(s) + l
+    fun toggleFavorite(s: Song) {
+        val adding = favorites.items.value.none { it.id == s.id }
+        favorites.update { l -> if (adding) listOf(s) + l else l.filter { it.id != s.id } }
+        if (adding && SettingsStore.state.value.autoFavDownload) {
+            Downloads.enqueue(SaavnApp.instance, listOf(s))
+        }
+    }
+
+    fun createPlaylist(name: String, first: List<Song> = emptyList()): String {
+        val id = "pl_" + System.currentTimeMillis()
+        playlists.update { listOf(UserPlaylist(id, name.trim().ifBlank { "New playlist" }, first)) + it }
+        return id
+    }
+
+    fun addToPlaylist(id: String, songs: List<Song>) = playlists.update { l ->
+        l.map { p ->
+            if (p.id != id) p else p.copy(songs = p.songs + songs.filter { s -> p.songs.none { it.id == s.id } })
+        }
+    }
+}
+
+/** JSON backup of settings, favorites, playlists and recent searches. */
+object Backup {
+    fun export(ctx: Context): String {
+        val s = SettingsStore.state.value
+        val root = JSONObject()
+        root.put("app", "SaavnDL"); root.put("version", 1)
+        root.put("settings", JSONObject().apply {
+            put("baseUrl", s.baseUrl); put("quality", s.quality); put("format", s.format.name)
+            put("saveCover", s.saveCover); put("limit", s.limit); put("theme", s.theme)
+            put("concurrent", s.concurrent); put("nameStyle", s.nameStyle); put("skipExisting", s.skipExisting)
+            put("wifiOnly", s.wifiOnly); put("retries", s.retries); put("embedLyrics", s.embedLyrics)
+            put("autoFavDownload", s.autoFavDownload); put("lang", s.lang); put("repo", s.repo)
+        })
+        root.put("favorites", JSONArray().also { a -> Stores.favorites.items.value.forEach { a.put(it.toJson()) } })
+        root.put("playlists", JSONArray().also { a -> Stores.playlists.items.value.forEach { a.put(it.toJson()) } })
+        root.put("recents", JSONArray().also { a -> Recents.items.value.forEach { a.put(it) } })
+        val name = "saavndl-backup-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + ".json"
+        MediaSaver.saveToDownloads(ctx, name, "application/json", root.toString(2).toByteArray(Charsets.UTF_8))
+        return name
+    }
+
+    fun restore(ctx: Context, uri: Uri): String {
+        val text = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            ?: throw IllegalArgumentException("Cannot read the file")
+        val root = JSONObject(text)
+        require(root.optString("app") == "SaavnDL") { "This is not a SaavnDL backup" }
+        root.optJSONObject("settings")?.let { o ->
+            val d = SettingsStore.state.value
+            SettingsStore.update {
+                it.copy(
+                    baseUrl = o.optString("baseUrl", d.baseUrl), quality = o.optString("quality", d.quality),
+                    format = runCatching { AudioFormat.valueOf(o.optString("format")) }.getOrDefault(d.format),
+                    saveCover = o.optBoolean("saveCover", d.saveCover), limit = o.optInt("limit", d.limit),
+                    theme = o.optString("theme", d.theme), concurrent = o.optInt("concurrent", d.concurrent),
+                    nameStyle = o.optInt("nameStyle", d.nameStyle), skipExisting = o.optBoolean("skipExisting", d.skipExisting),
+                    wifiOnly = o.optBoolean("wifiOnly", d.wifiOnly), retries = o.optInt("retries", d.retries),
+                    embedLyrics = o.optBoolean("embedLyrics", d.embedLyrics),
+                    autoFavDownload = o.optBoolean("autoFavDownload", d.autoFavDownload),
+                    lang = o.optString("lang", d.lang), repo = o.optString("repo", d.repo)
+                )
+            }
+        }
+        val fav = root.optJSONArray("favorites") ?: JSONArray()
+        val pls = root.optJSONArray("playlists") ?: JSONArray()
+        val favs = (0 until fav.length()).map { Song.fromJson(fav.getJSONObject(it)) }
+        val lists = (0 until pls.length()).map { UserPlaylist.fromJson(pls.getJSONObject(it)) }
+        Stores.favorites.update { cur -> favs + cur.filter { c -> favs.none { it.id == c.id } } }
+        Stores.playlists.update { cur -> lists + cur.filter { c -> lists.none { it.id == c.id } } }
+        root.optJSONArray("recents")?.let { a -> for (i in a.length() - 1 downTo 0) Recents.add(a.getString(i)) }
+        return "Restored ${favs.size} favorites and ${lists.size} playlists"
     }
 }

@@ -12,12 +12,15 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.content.ContextCompat
 import com.saavndl.app.data.SettingsStore
 import com.saavndl.app.ui.AppRoot
@@ -34,9 +37,12 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) incoming = extractLink(intent)
         setContent {
             val s by SettingsStore.state.collectAsState()
-            SaavnTheme(s.theme) {
-                NotificationPermission()
-                AppRoot(vm, incoming) { incoming = null }
+            val dir = if (s.lang == "ur") LayoutDirection.Rtl else LayoutDirection.Ltr
+            CompositionLocalProvider(LocalLayoutDirection provides dir) {
+                SaavnTheme(s.theme) {
+                    NotificationPermission()
+                    AppRoot(vm, incoming) { incoming = null }
+                }
             }
         }
     }

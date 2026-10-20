@@ -24,6 +24,48 @@ object Id3Writer {
 
     private fun utf16(s: String) = bom + s.toByteArray(Charsets.UTF_16LE)
 
+    class Info(val bodyOffset: Int, val cover: ByteArray?)
+
+    private fun i32(b: ByteArray, o: Int) =
+        ((b[o].toInt() and 0xff) shl 24) or ((b[o + 1].toInt() and 0xff) shl 16) or ((b[o + 2].toInt() and 0xff) shl 8) or (b[o + 3].toInt() and 0xff)
+
+    private fun sync(b: ByteArray, o: Int) =
+        ((b[o].toInt() and 0x7f) shl 21) or ((b[o + 1].toInt() and 0x7f) shl 14) or ((b[o + 2].toInt() and 0x7f) shl 7) or (b[o + 3].toInt() and 0x7f)
+
+    /** Finds where the audio starts (after any ID3v2 tag) and extracts the front cover if present. */
+    fun parse(b: ByteArray): Info {
+        if (b.size < 10 || b[0] != 'I'.code.toByte() || b[1] != 'D'.code.toByte() || b[2] != '3'.code.toByte()) return Info(0, null)
+        val ver = b[3].toInt()
+        val end = minOf(10 + sync(b, 6), b.size)
+        var p = 10
+        var cover: ByteArray? = null
+        while (p + 10 <= end) {
+            if (b[p].toInt() == 0) break
+            val id = String(b, p, 4, Charsets.ISO_8859_1)
+            val fs = if (ver == 4) sync(b, p + 4) else i32(b, p + 4)
+            val s = p + 10
+            if (fs <= 0 || s + fs > end) break
+            if (id == "APIC") cover = apic(b, s, s + fs)
+            p = s + fs
+        }
+        return Info(end, cover)
+    }
+
+    private fun apic(b: ByteArray, from: Int, to: Int): ByteArray? {
+        val enc = b[from].toInt()
+        var q = from + 1
+        while (q < to && b[q].toInt() != 0) q++
+        q += 2
+        if (enc == 1 || enc == 2) {
+            while (q + 1 < to && !(b[q].toInt() == 0 && b[q + 1].toInt() == 0)) q += 2
+            q += 2
+        } else {
+            while (q < to && b[q].toInt() != 0) q++
+            q += 1
+        }
+        return if (q < to) b.copyOfRange(q, to) else null
+    }
+
     fun build(m: Meta, cover: ByteArray?): ByteArray {
         val f = ByteArrayOutputStream()
         fun text(id: String, v: String) {
@@ -39,6 +81,9 @@ object Id3Writer {
         text("TCOP", m.copyright)
         if (m.comment.isNotBlank()) {
             f.write(frame("COMM", byteArrayOf(1) + "eng".toByteArray() + bom + byteArrayOf(0, 0) + utf16(m.comment)))
+        }
+        if (m.lyrics.isNotBlank()) {
+            f.write(frame("USLT", byteArrayOf(1) + "eng".toByteArray() + bom + byteArrayOf(0, 0) + utf16(m.lyrics)))
         }
         if (cover != null && cover.size > 8) {
             val png = cover[0] == 0x89.toByte() && cover[1] == 'P'.code.toByte()
