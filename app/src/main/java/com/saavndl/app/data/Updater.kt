@@ -11,9 +11,10 @@ data class UpdateInfo(val tag: String, val notes: String, val url: String)
 object Updater {
     /** Returns the newest GitHub release if it is newer than the installed version, else null. Throws on network errors. */
     suspend fun check(ctx: Context, repo: String): UpdateInfo? = withContext(Dispatchers.IO) {
-        if (!repo.trim().contains("/")) throw IOException("Set your GitHub repo as owner/name in Settings first")
-        val (code, body) = httpGetText("https://api.github.com/repos/${repo.trim()}/releases/latest")
-        if (code == 404) throw IOException("No release found for $repo")
+        val r = normalizeRepo(repo)
+        if (!r.contains("/")) throw IOException("Set your GitHub repo as owner/name in Settings first")
+        val (code, body) = httpGetText("https://api.github.com/repos/$r/releases/latest")
+        if (code == 404) throw IOException("No release found for $r yet")
         if (code !in 200..299) throw IOException("GitHub returned HTTP $code")
         val o = JSONObject(body)
         val tag = o.optString("tag_name")

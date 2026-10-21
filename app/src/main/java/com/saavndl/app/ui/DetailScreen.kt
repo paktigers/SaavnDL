@@ -71,7 +71,7 @@ fun DetailScreen(route: Route, onBack: () -> Unit) {
                     is Route.Detail -> SaavnApi.loadDetail(route.kind, route.id, route.link)
                     is Route.Similar -> Detail(
                         route.song.id, Kind.SONGS, "Similar to ${route.song.name}", route.song.artists,
-                        route.song.image, SaavnApi.similar(route.song.id)
+                        route.song.image, SaavnApi.similar(route.song)
                     )
                     else -> throw IllegalStateException("Unsupported route")
                 }

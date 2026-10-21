@@ -22,6 +22,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.saavndl.app.data.LibrarySync
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.saavndl.app.data.SettingsStore
 import com.saavndl.app.ui.AppRoot
 import com.saavndl.app.ui.AppVM
@@ -47,6 +51,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // keep the library in sync with the phone's storage (deleted files disappear, restored downloads appear)
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching {
+                LibrarySync.removeMissing(applicationContext)
+                if (LibrarySync.hasPermission(applicationContext)) LibrarySync.scanSaavnFolder(applicationContext)
+            }
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         extractLink(intent)?.let { incoming = it }
@@ -54,7 +69,7 @@ class MainActivity : ComponentActivity() {
 
     private fun extractLink(i: Intent?): String? {
         val raw = i?.dataString ?: i?.getStringExtra(Intent.EXTRA_TEXT) ?: return null
-        return Regex("https?://\\S*jiosaavn\\.com\\S*").find(raw)?.value
+        return Regex("https?://\\S*(?:jiosaavn|spotify)\\.com\\S*").find(raw)?.value
     }
 }
 

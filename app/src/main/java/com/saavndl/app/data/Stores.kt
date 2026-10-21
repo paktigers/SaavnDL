@@ -15,6 +15,17 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+const val DEFAULT_BASE_URL = "https://jiosaavn-api.tigerspak2.workers.dev"
+const val OLD_BASE_URL = "https://saavn.sumit.co"
+const val DEFAULT_REPO = "paktigers/SaavnDL"
+
+/** Accepts "owner/name" or a full GitHub URL (e.g. https://github.com/owner/name/releases). */
+fun normalizeRepo(input: String): String {
+    val m = Regex("github\\.com/([^/\\s]+)/([^/\\s#?]+)").find(input)
+    if (m != null) return m.groupValues[1] + "/" + m.groupValues[2].removeSuffix(".git")
+    return input.trim().trim('/')
+}
+
 enum class AudioFormat(val label: String, val desc: String) {
     ORIGINAL("Original M4A", "Exactly as delivered. No tags, no conversion."),
     M4A_TAGS("M4A + metadata", "Same audio quality, with full tags and cover art."),
@@ -22,7 +33,7 @@ enum class AudioFormat(val label: String, val desc: String) {
 }
 
 data class AppSettings(
-    val baseUrl: String = "https://saavn.sumit.co",
+    val baseUrl: String = DEFAULT_BASE_URL,
     val quality: String = "320kbps",
     val format: AudioFormat = AudioFormat.M4A_TAGS,
     val saveCover: Boolean = false,
@@ -36,8 +47,9 @@ data class AppSettings(
     val embedLyrics: Boolean = false,
     val autoFavDownload: Boolean = false,
     val lang: String = "en",
-    val repo: String = "",
-    val autoUpdate: Boolean = true
+    val repo: String = DEFAULT_REPO,
+    val autoUpdate: Boolean = true,
+    val homeLang: String = "hindi"
 )
 
 object SettingsStore {
@@ -49,7 +61,7 @@ object SettingsStore {
         sp = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
         val d = AppSettings()
         _state.value = AppSettings(
-            baseUrl = sp.getString("baseUrl", d.baseUrl) ?: d.baseUrl,
+            baseUrl = (sp.getString("baseUrl", null) ?: d.baseUrl).let { if (it.isBlank() || it.trimEnd('/') == OLD_BASE_URL) d.baseUrl else it },
             quality = sp.getString("quality", d.quality) ?: d.quality,
             format = runCatching { AudioFormat.valueOf(sp.getString("format", d.format.name) ?: d.format.name) }
                 .getOrDefault(d.format),
@@ -64,8 +76,9 @@ object SettingsStore {
             embedLyrics = sp.getBoolean("embedLyrics", d.embedLyrics),
             autoFavDownload = sp.getBoolean("autoFavDownload", d.autoFavDownload),
             lang = sp.getString("lang", d.lang) ?: d.lang,
-            repo = sp.getString("repo", d.repo) ?: d.repo,
-            autoUpdate = sp.getBoolean("autoUpdate", d.autoUpdate)
+            repo = (sp.getString("repo", null) ?: d.repo).let { if (it.isBlank()) d.repo else normalizeRepo(it) },
+            autoUpdate = sp.getBoolean("autoUpdate", d.autoUpdate),
+            homeLang = sp.getString("homeLang", d.homeLang) ?: d.homeLang
         )
         I18n.lang = _state.value.lang
     }
@@ -82,8 +95,12 @@ object SettingsStore {
             .putBoolean("skipExisting", n.skipExisting).putBoolean("wifiOnly", n.wifiOnly)
             .putInt("retries", n.retries).putBoolean("embedLyrics", n.embedLyrics)
             .putBoolean("autoFavDownload", n.autoFavDownload).putString("lang", n.lang)
-            .putString("repo", n.repo).putBoolean("autoUpdate", n.autoUpdate).apply()
+            .putString("repo", n.repo).putBoolean("autoUpdate", n.autoUpdate)
+            .putString("homeLang", n.homeLang).apply()
     }
+
+    fun restoreAsked(): Boolean = sp.getBoolean("restoreAsked", false)
+    fun markRestoreAsked() { sp.edit().putBoolean("restoreAsked", true).apply() }
 
     fun lastUpdateCheck(): Long = sp.getLong("lastUpdateCheck", 0L)
     fun markUpdateChecked() { sp.edit().putLong("lastUpdateCheck", System.currentTimeMillis()).apply() }

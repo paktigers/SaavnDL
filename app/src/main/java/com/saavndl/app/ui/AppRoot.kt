@@ -3,6 +3,8 @@ package com.saavndl.app.ui
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,12 +34,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.saavndl.app.data.LibrarySync
+import com.saavndl.app.data.SettingsStore
+import com.saavndl.app.data.Stores
 import com.saavndl.app.data.tr
 import com.saavndl.app.download.Downloads
 import kotlinx.coroutines.launch
@@ -49,11 +55,26 @@ fun AppRoot(vm: AppVM, incoming: String?, onConsumed: () -> Unit) {
     val stack = remember { mutableStateListOf<Route>() }
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var pendingAudio by remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
+    val audioLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        val cb = pendingAudio
+        pendingAudio = null
+        cb?.invoke(ok)
+    }
     val host = remember {
         Host(
             snack = { m -> scope.launch { snack.currentSnackbarData?.dismiss(); snack.showSnackbar(m) } },
-            push = { r -> if (stack.lastOrNull() != r) stack.add(r) }
+            push = { r -> if (stack.lastOrNull() != r) stack.add(r) },
+            withAudioPermission = { cb ->
+                if (LibrarySync.hasPermission(ctx)) cb(true)
+                else { pendingAudio = cb; audioLauncher.launch(LibrarySync.permissionName()) }
+            }
         )
+    }
+    var askRestore by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // After a reinstall the downloaded files are still on the phone but invisible to the new install until audio access is granted.
+        if (!LibrarySync.hasPermission(ctx) && !SettingsStore.restoreAsked() && Stores.library.items.value.isEmpty()) askRestore = true
     }
     val tasks by Downloads.tasks.collectAsState()
     val activeCount = tasks.count { it.active }
@@ -96,6 +117,8 @@ fun AppRoot(vm: AppVM, incoming: String?, onConsumed: () -> Unit) {
                         when (r) {
                             is Route.NowPlaying -> NowPlayingScreen(back)
                             is Route.Playlist -> PlaylistScreen(r.id, back)
+                            is Route.SpotifyImport -> SpotifyImportScreen(r.link, vm, back)
+                            is Route.ImportDevice -> ImportDeviceScreen(back)
                             else -> DetailScreen(r, back)
                         }
                     }
@@ -108,6 +131,26 @@ fun AppRoot(vm: AppVM, incoming: String?, onConsumed: () -> Unit) {
             }
         }
 
+        if (askRestore) {
+            AlertDialog(
+                onDismissRequest = { askRestore = false; SettingsStore.markRestoreAsked() },
+                title = { Text("Restore your downloaded songs?") },
+                text = { Text("If you downloaded songs with SaavnDL before, they are still in Music/SaavnDL. Allow access to the music on your phone and they will be added back to your library automatically.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        askRestore = false
+                        SettingsStore.markRestoreAsked()
+                        host.withAudioPermission { ok ->
+                            if (ok) scope.launch {
+                                val n = LibrarySync.scanSaavnFolder(ctx)
+                                host.snack(if (n > 0) "Restored $n songs" else "No previous downloads found")
+                            }
+                        }
+                    }) { Text("Allow") }
+                },
+                dismissButton = { TextButton(onClick = { askRestore = false; SettingsStore.markRestoreAsked() }) { Text("Not now") } }
+            )
+        }
         vm.update?.let { u ->
             AlertDialog(
                 onDismissRequest = { vm.update = null },

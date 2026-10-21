@@ -43,10 +43,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -100,6 +102,7 @@ fun NowPlayingScreen(onBack: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     var addTo by remember { mutableStateOf<List<com.saavndl.app.data.Song>?>(null) }
     var drag by remember { mutableStateOf<Float?>(null) }
+    var lyricsOffset by remember(tr0.id) { mutableIntStateOf(0) }
 
     LaunchedEffect(tr0.id, showLyrics) {
         if (showLyrics && lyrics == null && !lyricsMissing) {
@@ -140,7 +143,7 @@ fun NowPlayingScreen(onBack: () -> Unit) {
                     if (url.isNotBlank()) AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 }
             } else {
-                LyricsPanel(lyrics, lyricsBusy, lyricsMissing, pos)
+                LyricsPanel(lyrics, lyricsBusy, lyricsMissing, pos, lyricsOffset) { lyricsOffset += it }
             }
         }
 
@@ -196,34 +199,50 @@ fun NowPlayingScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun LyricsPanel(lyrics: Lyrics?, busy: Boolean, missing: Boolean, pos: Int) {
-    Box(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainer), contentAlignment = Alignment.Center) {
-        when {
-            busy -> CircularProgressIndicator()
-            missing || lyrics == null -> Text("No lyrics found for this song", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            lyrics.instrumental && lyrics.plain.isBlank() -> Text("Instrumental", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            lyrics.synced.isNotEmpty() -> {
-                val idx = lyrics.synced.indexOfLast { it.ms <= pos }
-                val state = rememberLazyListState()
-                LaunchedEffect(idx) { if (idx >= 0) state.animateScrollToItem((idx - 2).coerceAtLeast(0)) }
-                LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), state = state) {
-                    itemsIndexed(lyrics.synced) { i, l ->
-                        Text(
-                            l.text.ifBlank { "♪" },
-                            Modifier.fillMaxWidth().clickable { PlayerController.seekTo(l.ms.toInt()) }.padding(vertical = 8.dp),
-                            fontSize = if (i == idx) 20.sp else 16.sp,
-                            fontWeight = if (i == idx) FontWeight.Bold else FontWeight.Normal,
-                            color = if (i == idx) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+private fun LyricsPanel(lyrics: Lyrics?, busy: Boolean, missing: Boolean, pos: Int, offset: Int, onShift: (Int) -> Unit) {
+    Column(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainer)) {
+        val synced = lyrics != null && lyrics.synced.isNotEmpty()
+        if (lyrics != null && !busy) {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (synced) "Time-synced lyrics" else "Plain lyrics (no timing available)",
+                    Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (synced) {
+                    TextButton(onClick = { onShift(-500) }) { Text("−0.5s") }
+                    Text("${offset / 1000.0}s", style = MaterialTheme.typography.labelSmall)
+                    TextButton(onClick = { onShift(500) }) { Text("+0.5s") }
                 }
             }
-            else -> Text(
-                lyrics.plain,
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge
-            )
+        }
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            when {
+                busy -> CircularProgressIndicator()
+                missing || lyrics == null -> Text("No lyrics found for this song", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                lyrics.instrumental && lyrics.plain.isBlank() -> Text("Instrumental", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                synced -> {
+                    val idx = lyrics!!.synced.indexOfLast { it.ms + offset <= pos }
+                    val state = rememberLazyListState()
+                    LaunchedEffect(idx) { if (idx >= 0) state.animateScrollToItem((idx - 2).coerceAtLeast(0)) }
+                    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), state = state) {
+                        itemsIndexed(lyrics!!.synced) { i, l ->
+                            Text(
+                                l.text.ifBlank { "♪" },
+                                Modifier.fillMaxWidth().clickable { PlayerController.seekTo((l.ms + offset).toInt().coerceAtLeast(0)) }.padding(vertical = 8.dp),
+                                fontSize = if (i == idx) 20.sp else 16.sp,
+                                fontWeight = if (i == idx) FontWeight.Bold else FontWeight.Normal,
+                                color = if (i == idx) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+                else -> Text(
+                    lyrics.plain,
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                    textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge
+                )
+            }
         }
     }
 }

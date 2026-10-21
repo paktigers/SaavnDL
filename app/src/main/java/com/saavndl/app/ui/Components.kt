@@ -45,6 +45,8 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Layers
@@ -87,6 +89,8 @@ import com.saavndl.app.data.Stores
 import com.saavndl.app.data.compactNum
 import com.saavndl.app.data.fmtDur
 import com.saavndl.app.data.tr
+import com.saavndl.app.download.DlStatus
+import com.saavndl.app.download.DlTask
 import com.saavndl.app.download.Downloads
 import com.saavndl.app.player.PlayerController
 import com.saavndl.app.player.toTrack
@@ -97,9 +101,16 @@ sealed class Route {
     data class Similar(val song: Song) : Route()
     object NowPlaying : Route()
     data class Playlist(val id: String) : Route()
+    data class SpotifyImport(val link: String) : Route()
+    object ImportDevice : Route()
 }
 
-class Host(val snack: (String) -> Unit, val push: (Route) -> Unit)
+class Host(
+    val snack: (String) -> Unit,
+    val push: (Route) -> Unit,
+    /** Runs the callback once the audio-library permission is granted (asks the user if needed). */
+    val withAudioPermission: ((Boolean) -> Unit) -> Unit = { it(false) }
+)
 
 val LocalHost = staticCompositionLocalOf<Host> { error("Host not provided") }
 
@@ -182,6 +193,7 @@ fun ErrorState(message: String, onRetry: () -> Unit) {
 @Composable
 fun SongRow(
     song: Song, selected: Boolean, isCurrent: Boolean, playing: Boolean, fav: Boolean,
+    dl: DlTask?, inLibrary: Boolean, onCancelDl: () -> Unit,
     onClick: () -> Unit, onLong: () -> Unit, onDownload: () -> Unit, onFav: () -> Unit,
     onInfo: () -> Unit, onSimilar: () -> Unit, onShare: () -> Unit, onCopy: () -> Unit,
     onAddPlaylist: () -> Unit, onPlayNext: () -> Unit, onQueue: () -> Unit
@@ -211,7 +223,22 @@ fun SongRow(
             Text(fmtDur(song.duration) + if (song.year.isNotBlank()) " · ${song.year}" else "", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .7f))
         }
-        IconButton(onClick = onDownload) { Icon(Icons.Filled.Download, "Download", tint = MaterialTheme.colorScheme.primary) }
+        val d = dl
+        val busy = d != null && d.active
+        IconButton(onClick = { if (busy) onCancelDl() else onDownload() }) {
+            when {
+                busy -> Box(contentAlignment = Alignment.Center) {
+                    if (d != null && d.status == DlStatus.DOWNLOADING && d.progress > 0f)
+                        CircularProgressIndicator(progress = { d.progress }, modifier = Modifier.size(26.dp), strokeWidth = 2.5.dp)
+                    else CircularProgressIndicator(modifier = Modifier.size(26.dp), strokeWidth = 2.5.dp)
+                    Icon(Icons.Filled.Close, "Cancel", Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                d != null && d.status == DlStatus.FAILED -> Icon(Icons.Filled.Refresh, "Retry", tint = MaterialTheme.colorScheme.error)
+                inLibrary || (d != null && (d.status == DlStatus.DONE || d.status == DlStatus.SKIPPED)) ->
+                    Icon(Icons.Filled.CheckCircle, "Downloaded", tint = MaterialTheme.colorScheme.primary)
+                else -> Icon(Icons.Filled.Download, "Download", tint = MaterialTheme.colorScheme.primary)
+            }
+        }
         IconButton(onClick = onFav) {
             Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "Favorite",
                 tint = if (fav) Color(0xFFFF5C8A) else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -271,6 +298,10 @@ fun SongsList(
     val ctx = LocalContext.current
     val sel = remember(songs.size) { SelectionState() }
     val favs by Stores.favorites.items.collectAsState()
+    val tasks by Downloads.tasks.collectAsState()
+    val lib by Stores.library.items.collectAsState()
+    val taskBy = remember(tasks) { tasks.groupBy { it.song.id }.mapValues { it.value.last() } }
+    val libIds = remember(lib) { lib.map { it.songId }.toSet() }
     val cur by PlayerController.current.collectAsState()
     val playing by PlayerController.playing.collectAsState()
     var info by remember { mutableStateOf<Song?>(null) }
@@ -306,13 +337,20 @@ fun SongsList(
                 SongRow(
                     song = s, selected = i in sel.ids, isCurrent = cur?.id == s.id, playing = playing,
                     fav = favs.any { it.id == s.id },
+                    dl = taskBy[s.id], inLibrary = s.id in libIds,
+                    onCancelDl = { taskBy[s.id]?.let { Downloads.cancel(it.id) } },
                     onClick = {
                         if (sel.active) sel.toggle(i)
                         else if (cur?.id == s.id) PlayerController.toggle()
                         else PlayerController.playQueue(songs.map { it.toTrack() }, i)
                     },
                     onLong = { sel.toggle(i) },
-                    onDownload = { download(listOf(i)) },
+                    onDownload = {
+                        val t = taskBy[s.id]
+                        if (t != null && t.status == DlStatus.FAILED) Downloads.retry(ctx, t.id)
+                        else if (s.id in libIds) host.snack("Already in your library")
+                        else download(listOf(i))
+                    },
                     onFav = { Stores.toggleFavorite(s) },
                     onInfo = { info = s },
                     onSimilar = { host.push(Route.Similar(s)) },

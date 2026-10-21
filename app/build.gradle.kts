@@ -16,6 +16,12 @@ android {
         targetSdk = 35
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toIntOrNull() ?: 1
         versionName = System.getenv("APP_VERSION")?.removePrefix("v")?.takeIf { it.isNotBlank() } ?: "1.0.0"
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+    }
+
+    // Native MP3 encoder (LAME). Skipped with -PnoNative so the app can still be built if the NDK/LAME step fails.
+    if (!project.hasProperty("noNative")) {
+        externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt") } }
     }
 
     signingConfigs {
@@ -57,7 +63,5 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("io.coil-kt:coil-compose:2.7.0")
-    // Optional LAME wrapper for MP3 encoding (loaded via reflection; if it cannot be resolved,
-    // delete this single line and the MP3 option will simply fall back to tagged M4A).
-    implementation("com.github.naman14:TAndroidLame:1.1")
+    implementation("androidx.documentfile:documentfile:1.0.1")
 }

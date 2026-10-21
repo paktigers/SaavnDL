@@ -74,7 +74,24 @@ object SaavnApi {
     suspend fun songById(id: String): Song =
         get("/api/songs/${enc(id)}").asSongs().firstOrNull() ?: throw IOException("Song not found")
 
-    suspend fun similar(id: String): List<Song> = get("/api/songs/${enc(id)}/suggestions?limit=25").asSongs()
+    /** Similar songs. The suggestions endpoint is flaky on some servers (HTTP 500), so fall back to a search by artist. */
+    suspend fun similar(song: Song): List<Song> {
+        try {
+            val l = get("/api/songs/${enc(song.id)}/suggestions?limit=10").asSongs().filter { it.id != song.id }
+            if (l.isNotEmpty()) return l
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+        }
+        val out = LinkedHashMap<String, Song>()
+        val artist = song.firstArtist.ifBlank { song.artists.split(",").firstOrNull().orEmpty().trim() }
+        if (artist.isNotBlank()) searchSongs(artist, 0, 25).second.forEach { if (it.id != song.id) out.putIfAbsent(it.id, it) }
+        if (out.size < 10 && song.album.isNotBlank()) searchSongs(song.album, 0, 15).second.forEach { if (it.id != song.id) out.putIfAbsent(it.id, it) }
+        if (out.isEmpty()) throw IOException("No similar songs found")
+        return out.values.toList()
+    }
+
+    suspend fun similar(id: String): List<Song> = get("/api/songs/${enc(id)}/suggestions?limit=10").asSongs()
 
     suspend fun artistSongs(id: String, page: Int): List<Song> {
         val d = get("/api/artists/${enc(id)}/songs?page=$page&sortBy=popularity&sortOrder=desc")
@@ -82,6 +99,19 @@ object SaavnApi {
     }
 
     suspend fun loadDetail(kind: Kind, id: String?, link: String?): Detail {
+        if (id != null && link != null) {
+            return try {
+                loadDetailOnce(kind, id, null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                loadDetailOnce(kind, null, link)
+            }
+        }
+        return loadDetailOnce(kind, id, link)
+    }
+
+    private suspend fun loadDetailOnce(kind: Kind, id: String?, link: String?): Detail {
         val q = if (id != null) "id=${enc(id)}" else "link=${enc(link ?: "")}"
         return when (kind) {
             Kind.ALBUMS -> collection(kind, get("/api/albums?$q") as JSONObject)

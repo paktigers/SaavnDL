@@ -18,21 +18,50 @@ object LyricsApi {
         try {
             val cleanTitle = title.replace(Regex("\\s*[\\(\\[].*?[\\)\\]]"), "").trim().ifBlank { title }
             val firstArtist = artist.split(",", "&").firstOrNull()?.trim().orEmpty().ifBlank { artist }
+            val records = ArrayList<JSONObject>()
+
+            fun addAll(body: String) {
+                val arr = JSONArray(body)
+                for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { records.add(it) }
+            }
+            fun hasSynced(o: JSONObject) = !o.isNull("syncedLyrics") && o.optString("syncedLyrics").isNotBlank()
+            fun closeEnough(o: JSONObject) = durationSec <= 0 || kotlin.math.abs(o.optDouble("duration", 0.0) - durationSec) <= 6
+
             if (durationSec > 0) {
                 val url = "$BASE/get?artist_name=${Uri.encode(firstArtist)}&track_name=${Uri.encode(cleanTitle)}" +
                     "&album_name=${Uri.encode(album)}&duration=$durationSec"
                 val (code, body) = httpGetText(url)
-                if (code == 200) parse(JSONObject(body))?.let { return@withContext it }
-            }
-            val sUrl = "$BASE/search?track_name=${Uri.encode(cleanTitle)}&artist_name=${Uri.encode(firstArtist)}"
-            val (code2, body2) = httpGetText(sUrl)
-            if (code2 == 200) {
-                val arr = JSONArray(body2)
-                for (i in 0 until arr.length()) {
-                    parse(arr.getJSONObject(i))?.let { return@withContext it }
+                if (code == 200) {
+                    val o = JSONObject(body)
+                    records.add(o)
+                    if (hasSynced(o)) return@withContext parse(o)
                 }
             }
-            null
+            val searches = listOf(
+                "$BASE/search?track_name=${Uri.encode(cleanTitle)}&artist_name=${Uri.encode(firstArtist)}",
+                "$BASE/search?q=${Uri.encode("$cleanTitle $firstArtist")}",
+                "$BASE/search?q=${Uri.encode(cleanTitle)}"
+            )
+            for (u in searches) {
+                val (code, body) = httpGetText(u)
+                if (code == 200) addAll(body)
+                if (records.any { hasSynced(it) && closeEnough(it) }) break
+            }
+            val key = { s: String -> s.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "") }
+            val want = key(cleanTitle)
+            val best = records.mapNotNull { o ->
+                val hasAny = hasSynced(o) || (!o.isNull("plainLyrics") && o.optString("plainLyrics").isNotBlank())
+                if (!hasAny) return@mapNotNull null
+                var sc = if (hasSynced(o)) 10 else 3
+                if (durationSec > 0) {
+                    val diff = kotlin.math.abs(o.optDouble("duration", 0.0) - durationSec)
+                    sc += when { diff <= 3 -> 5; diff <= 8 -> 3; diff <= 20 -> 1; else -> -3 }
+                }
+                val name = key(o.optString("trackName").replace(Regex("\\s*[\\(\\[].*?[\\)\\]]"), ""))
+                if (name == want) sc += 3 else if (name.contains(want) || want.contains(name)) sc += 1
+                o to sc
+            }.maxByOrNull { it.second }?.first
+            if (best != null) parse(best) else null
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -101,32 +101,16 @@ object Id3Writer {
 }
 
 /**
- * Decodes AAC with MediaCodec and encodes MP3 using the optional LAME wrapper
- * (com.naman14.androidlame, loaded by reflection so the app still builds/runs without it).
+ * Decodes AAC with MediaCodec and encodes MP3 with LAME through JNI (see Mp3Native and scripts/build_lame.sh).
  */
 object Mp3Encoder {
-    private fun Any.call(name: String, vararg args: Any?): Any? {
-        val m = javaClass.methods.first { it.name == name && it.parameterCount == args.size }
-        return m.invoke(this, *args)
-    }
-
-    private fun newLame(rate: Int, channels: Int, kbps: Int): Any {
-        val b = Class.forName("com.naman14.androidlame.LameBuilder").getDeclaredConstructor().newInstance()
-        b.call("setInSampleRate", rate)
-        b.call("setOutSampleRate", rate)
-        b.call("setOutChannels", channels)
-        b.call("setOutBitrate", kbps)
-        b.call("setQuality", 2)
-        return b.call("build") ?: error("LAME build failed")
-    }
-
-    fun isAvailable(): Boolean = runCatching { Class.forName("com.naman14.androidlame.AndroidLame"); true }.getOrDefault(false)
+    fun isAvailable(): Boolean = Mp3Native.isAvailable()
 
     fun encode(src: File, dst: File, kbps: Int, meta: Meta, cover: ByteArray?) {
-        check(isAvailable()) { "LAME library not present" }
+        check(isAvailable()) { "MP3 encoder not available in this build" }
         val ex = MediaExtractor()
         var codec: MediaCodec? = null
-        var lame: Any? = null
+        var lame = 0L
         try {
             ex.setDataSource(src.absolutePath)
             var track = -1
@@ -173,7 +157,10 @@ object Mp3Encoder {
                     } else if (oi >= 0) {
                         val ob = c.getOutputBuffer(oi)!!
                         if (info.size > 0) {
-                            if (lame == null) lame = newLame(rate, channels, kbps)
+                            if (lame == 0L) {
+                                lame = Mp3Native.init(rate, channels, kbps)
+                                check(lame != 0L) { "LAME init failed" }
+                            }
                             ob.position(info.offset)
                             ob.limit(info.offset + info.size)
                             val sb = ob.order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
@@ -182,21 +169,22 @@ object Mp3Encoder {
                             val frames = pcm.size / channels
                             val need = (frames * 1.25 + 7200).toInt()
                             if (mp3.size < need) mp3 = ByteArray(need)
-                            val n = lame!!.call("encodeBufferInterLeaved", pcm, frames, mp3) as Int
+                            val n = Mp3Native.encode(lame, pcm, frames, mp3)
+                            check(n >= 0) { "LAME encode error $n" }
                             if (n > 0) out.write(mp3, 0, n)
                         }
                         c.releaseOutputBuffer(oi, false)
                         if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outDone = true
                     }
                 }
-                lame?.let {
+                if (lame != 0L) {
                     if (mp3.size < 7200) mp3 = ByteArray(7200)
-                    val n = it.call("flush", mp3) as Int
+                    val n = Mp3Native.flush(lame, mp3)
                     if (n > 0) out.write(mp3, 0, n)
                 }
             }
         } finally {
-            runCatching { lame?.call("close") }
+            if (lame != 0L) runCatching { Mp3Native.close(lame) }
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
             runCatching { ex.release() }

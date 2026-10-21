@@ -60,6 +60,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.saavndl.app.data.LibItem
+import com.saavndl.app.data.LibrarySync
 import com.saavndl.app.data.Stores
 import com.saavndl.app.data.fmtSize
 import com.saavndl.app.data.tr
@@ -68,6 +69,8 @@ import com.saavndl.app.player.PlayerController
 import com.saavndl.app.player.Track
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun LibraryScreen() {
@@ -117,6 +120,7 @@ private fun Downloaded(items: List<LibItem>) {
     var edit by remember { mutableStateOf<LibItem?>(null) }
     var tools by remember { mutableStateOf(false) }
     var dupDialog by remember { mutableStateOf<List<List<LibItem>>?>(null) }
+    val scope = rememberCoroutineScope()
 
     val filtered = items.filter { filter.isBlank() || it.title.contains(filter, true) || it.artist.contains(filter, true) || it.album.contains(filter, true) }
     val shown = when (sort) {
@@ -132,7 +136,9 @@ private fun Downloaded(items: List<LibItem>) {
     }
     fun tracks() = shown.map { Track(it.songId, it.title, it.artist, it.thumb, it.uri, it.album, 0, it.image) }
     fun deleteFile(it: LibItem) {
-        try { ctx.contentResolver.delete(Uri.parse(it.uri), null, null) } catch (e: Exception) { }
+        if (!it.songId.startsWith("local_")) {
+            try { ctx.contentResolver.delete(Uri.parse(it.uri), null, null) } catch (e: Exception) { }
+        }
         if (cur?.source == it.uri) PlayerController.stop()
     }
 
@@ -156,6 +162,21 @@ private fun Downloaded(items: List<LibItem>) {
                 Row {
                     IconButton(onClick = { tools = true }) { Icon(Icons.Filled.MoreVert, "Tools") }
                     DropdownMenu(expanded = tools, onDismissRequest = { tools = false }) {
+                        DropdownMenuItem(text = { Text("Import songs from phone") }, onClick = {
+                            tools = false
+                            host.push(Route.ImportDevice)
+                        })
+                        DropdownMenuItem(text = { Text("Restore from Music/SaavnDL") }, onClick = {
+                            tools = false
+                            host.withAudioPermission { ok ->
+                                if (!ok) host.snack("Allow audio access to scan your Music/SaavnDL folder")
+                                else scope.launch {
+                                    val added = LibrarySync.scanSaavnFolder(ctx)
+                                    val removed = withContext(Dispatchers.IO) { LibrarySync.removeMissing(ctx) }
+                                    host.snack("Added $added songs, removed $removed missing entries")
+                                }
+                            }
+                        })
                         DropdownMenuItem(text = { Text("Find duplicates") }, onClick = {
                             tools = false
                             val g = dupGroups(items)
@@ -206,7 +227,7 @@ private fun Downloaded(items: List<LibItem>) {
                         if (isCur && playing) Icon(Icons.Filled.GraphicEq, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.height(14.dp))
                     }
                 }
-                IconButton(onClick = { edit = li }) { Icon(Icons.Filled.Edit, tr("Edit tags"), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                if (!li.songId.startsWith("local_")) IconButton(onClick = { edit = li }) { Icon(Icons.Filled.Edit, tr("Edit tags"), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                 IconButton(onClick = {
                     val send = Intent(Intent.ACTION_SEND).setType(if (li.format == "MP3") "audio/mpeg" else "audio/mp4")
                         .putExtra(Intent.EXTRA_STREAM, Uri.parse(li.uri)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -221,8 +242,8 @@ private fun Downloaded(items: List<LibItem>) {
     delete?.let { item ->
         AlertDialog(
             onDismissRequest = { delete = null },
-            title = { Text("Delete song?") },
-            text = { Text("\"${item.title}\" will be removed from your device.") },
+            title = { Text(if (item.songId.startsWith("local_")) "Remove from library?" else "Delete song?") },
+            text = { Text(if (item.songId.startsWith("local_")) "\"${item.title}\" will be removed from SaavnDL. The file stays on your phone." else "\"${item.title}\" will be removed from your device.") },
             confirmButton = {
                 TextButton(onClick = {
                     deleteFile(item)

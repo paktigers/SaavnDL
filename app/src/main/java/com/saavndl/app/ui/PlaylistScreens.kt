@@ -64,10 +64,11 @@ fun PlaylistsTab() {
     val host = LocalHost.current
     var creating by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilledTonalButton(onClick = { creating = true }) {
                 Icon(Icons.Filled.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(tr("New playlist"))
             }
+            androidx.compose.material3.OutlinedButton(onClick = { host.push(Route.SpotifyImport("")) }) { Text("Import Spotify") }
         }
         if (lists.isEmpty()) {
             EmptyState(Icons.Filled.PlaylistPlay, "No playlists yet", "Create one, then add songs from the menu of any song.")

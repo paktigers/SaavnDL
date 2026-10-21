@@ -63,6 +63,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.saavndl.app.data.AppLog
+import com.saavndl.app.data.DEFAULT_BASE_URL
+import com.saavndl.app.data.LibrarySync
+import com.saavndl.app.data.normalizeRepo
 import com.saavndl.app.data.AudioFormat
 import com.saavndl.app.data.Backup
 import com.saavndl.app.data.SaavnApi
@@ -197,9 +200,10 @@ fun SettingsScreen(vm: AppVM) {
             OutlinedTextField(value = url, onValueChange = { url = it }, singleLine = true, label = { Text("Base URL") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = {
-                    SettingsStore.update { it.copy(baseUrl = url.trim().ifBlank { "https://saavn.sumit.co" }) }
+                    SettingsStore.update { it.copy(baseUrl = url.trim().ifBlank { DEFAULT_BASE_URL }) }
                     apiStatus = "Saved"
                 }) { Text(tr("Save")) }
+                OutlinedButton(onClick = { url = DEFAULT_BASE_URL; SettingsStore.update { it.copy(baseUrl = DEFAULT_BASE_URL) }; apiStatus = "Reset to default" }) { Text("Default") }
                 OutlinedButton(onClick = {
                     apiStatus = "Testing…"
                     scope.launch {
@@ -230,10 +234,10 @@ fun SettingsScreen(vm: AppVM) {
 
         SectionCard("Updates", Icons.Filled.SystemUpdate) {
             Text("Installed version: $version", style = MaterialTheme.typography.bodyMedium)
-            OutlinedTextField(value = repo, onValueChange = { repo = it }, singleLine = true, label = { Text("GitHub repo (owner/name)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+            OutlinedTextField(value = repo, onValueChange = { repo = it }, singleLine = true, label = { Text("GitHub repo (owner/name or URL)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
             ToggleRow("Check automatically", "Once a day when the app starts", s.autoUpdate) { v -> SettingsStore.update { it.copy(autoUpdate = v) } }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = { SettingsStore.update { it.copy(repo = repo.trim()) }; vm.checkUpdate(ctx, true) }) { Text("Check for updates") }
+                Button(onClick = { val r = normalizeRepo(repo); repo = r; SettingsStore.update { it.copy(repo = r) }; vm.checkUpdate(ctx, true) }) { Text("Check for updates") }
             }
             if (vm.updateStatus.isNotBlank()) Text(vm.updateStatus, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -250,6 +254,16 @@ fun SettingsScreen(vm: AppVM) {
                         )
                     } catch (e: Exception) { host.snack("Open your Files app → Music → SaavnDL") }
                 }) { Icon(Icons.Filled.Folder, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Open folder") }
+                OutlinedButton(onClick = {
+                    host.withAudioPermission { ok ->
+                        if (!ok) host.snack("Allow audio access to restore your downloads")
+                        else scope.launch {
+                            val n = LibrarySync.scanSaavnFolder(ctx)
+                            val r = LibrarySync.removeMissing(ctx)
+                            host.snack("Added $n songs, removed $r missing entries")
+                        }
+                    }
+                }) { Text("Restore downloads") }
                 OutlinedButton(onClick = {
                     var freed = 0L
                     ctx.cacheDir.listFiles()?.forEach { f -> if (f.isFile) { freed += f.length(); f.delete() } }

@@ -10,21 +10,29 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.saavndl.app.data.Coll
 import com.saavndl.app.data.Kind
+import com.saavndl.app.data.LatestApi
 import com.saavndl.app.data.Recents
 import com.saavndl.app.data.SaavnApi
+import com.saavndl.app.data.Section
 import com.saavndl.app.data.SettingsStore
 import com.saavndl.app.data.Song
+import com.saavndl.app.data.SpList
+import com.saavndl.app.data.SpMatch
+import com.saavndl.app.data.SpotifyApi
 import com.saavndl.app.data.Stores
 import com.saavndl.app.data.UpdateInfo
 import com.saavndl.app.data.Updater
 import com.saavndl.app.download.Downloads
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class AppVM : ViewModel() {
     var query by mutableStateOf("")
+    var submitted by mutableStateOf("")
     var kind by mutableStateOf(Kind.SONGS)
     var songs by mutableStateOf<List<Song>>(emptyList())
     var colls by mutableStateOf<List<Coll>>(emptyList())
@@ -33,30 +41,58 @@ class AppVM : ViewModel() {
     var searched by mutableStateOf(false)
     var total by mutableIntStateOf(0)
     var batchStatus by mutableStateOf("")
-    var suggestions by mutableStateOf<List<String>>(emptyList())
     var langFilter by mutableStateOf("All")
     var forYou by mutableStateOf<List<Song>>(emptyList())
     var forYouFrom by mutableStateOf("")
     var update by mutableStateOf<UpdateInfo?>(null)
     var updateStatus by mutableStateOf("")
+
+    // live suggestions while typing
+    var sugSongs by mutableStateOf<List<Song>>(emptyList())
+    var sugColls by mutableStateOf<List<Coll>>(emptyList())
+    var sugLoading by mutableStateOf(false)
+
+    // latest releases
+    var latest by mutableStateOf<List<Section>>(emptyList())
+    var latestLoading by mutableStateOf(false)
+    var latestError by mutableStateOf(false)
+
+    // spotify import
+    var spBusy by mutableStateOf(false)
+    var spStatus by mutableStateOf("")
+    var spList by mutableStateOf<SpList?>(null)
+    var spMatches by mutableStateOf<List<SpMatch>>(emptyList())
+    var spPlaylistId by mutableStateOf<String?>(null)
+
     private var page = 0
     private var job: Job? = null
     private var sugJob: Job? = null
+    private var spJob: Job? = null
+    private var latestJob: Job? = null
 
-    // ------------------------------------------------------------------ search
+    // ------------------------------------------------------------------ search + live suggestions
     fun onQueryChange(q: String) {
         query = q
         sugJob?.cancel()
-        if (q.trim().length < 2 || q.contains("jiosaavn.com")) { suggestions = emptyList(); return }
+        val t = q.trim()
+        if (t.length < 2 || t.contains("jiosaavn.com") || SpotifyApi.isSpotifyLink(t)) {
+            sugSongs = emptyList(); sugColls = emptyList(); sugLoading = false
+            return
+        }
         sugJob = viewModelScope.launch {
-            delay(350)
+            delay(300)
+            sugLoading = true
             try {
-                val (_, l) = SaavnApi.searchSongs(q.trim(), 0, 6)
-                suggestions = l.map { it.name }.distinct().take(5)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                suggestions = emptyList()
+                coroutineScope {
+                    val songsD = async { runCatching { SaavnApi.searchSongs(t, 0, 8).second }.getOrDefault(emptyList()) }
+                    val albumsD = async { runCatching { SaavnApi.searchColl(Kind.ALBUMS, t, 4) }.getOrDefault(emptyList()) }
+                    val listsD = async { runCatching { SaavnApi.searchColl(Kind.PLAYLISTS, t, 4) }.getOrDefault(emptyList()) }
+                    val s = songsD.await(); val a = albumsD.await(); val p = listsD.await()
+                    sugSongs = s
+                    sugColls = a + p
+                }
+            } finally {
+                sugLoading = false
             }
         }
     }
@@ -65,10 +101,11 @@ class AppVM : ViewModel() {
         val q = query.trim()
         if (q.isEmpty()) return
         sugJob?.cancel()
-        suggestions = emptyList()
+        sugSongs = emptyList(); sugColls = emptyList(); sugLoading = false
         job?.cancel()
         page = 0
         songs = emptyList(); colls = emptyList(); error = null; total = 0; langFilter = "All"
+        submitted = q
         Recents.add(q)
         load(q)
     }
@@ -104,6 +141,32 @@ class AppVM : ViewModel() {
         }
     }
 
+    // ------------------------------------------------------------------ latest releases
+    fun loadLatest(force: Boolean = false) {
+        if (!force && (latest.isNotEmpty() || latestLoading)) return
+        latestJob?.cancel()
+        latestJob = viewModelScope.launch {
+            latestLoading = true
+            latestError = false
+            try {
+                latest = LatestApi.load(SettingsStore.state.value.homeLang)
+                latestError = latest.isEmpty()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                latestError = true
+            } finally {
+                latestLoading = false
+            }
+        }
+    }
+
+    fun setHomeLang(l: String) {
+        SettingsStore.update { it.copy(homeLang = l) }
+        latest = emptyList()
+        loadLatest(true)
+    }
+
     // ------------------------------------------------------------------ "For you"
     fun loadForYou(force: Boolean = false) {
         if (!force && forYou.isNotEmpty()) return
@@ -114,15 +177,44 @@ class AppVM : ViewModel() {
                 val picks = favs.shuffled().take(3)
                 val out = LinkedHashMap<String, Song>()
                 for (f in picks) {
-                    for (s in SaavnApi.similar(f.id)) {
-                        if (favs.none { it.id == s.id }) out.putIfAbsent(s.id, s)
+                    try {
+                        for (s in SaavnApi.similar(f)) if (favs.none { it.id == s.id }) out.putIfAbsent(s.id, s)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
                     }
                 }
                 forYou = out.values.take(30)
                 forYouFrom = picks.first().name
             } catch (e: CancellationException) {
                 throw e
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ Spotify import
+    fun importSpotify(link: String) {
+        val p = SpotifyApi.parseLink(link)
+        if (p == null) { spStatus = "That is not a Spotify playlist or album link"; return }
+        spJob?.cancel()
+        spJob = viewModelScope.launch {
+            spBusy = true; spList = null; spMatches = emptyList(); spPlaylistId = null
+            spStatus = "Reading the Spotify ${p.first}…"
+            try {
+                val list = SpotifyApi.load(p.first, p.second)
+                spList = list
+                spStatus = "Matching 0/${list.tracks.size}"
+                val m = SpotifyApi.matchAll(list) { d, t -> spStatus = "Matching $d/$t" }
+                spMatches = m
+                val found = m.mapNotNull { it.song }.distinctBy { it.id }
+                if (found.isNotEmpty()) spPlaylistId = Stores.createPlaylist(list.name, found)
+                spStatus = "Matched ${found.size} of ${list.tracks.size} songs"
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                spStatus = e.message ?: "Import failed"
+            } finally {
+                spBusy = false
             }
         }
     }

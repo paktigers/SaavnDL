@@ -3,24 +3,19 @@
 Jetpack Compose app on top of the open-source `jiosaavn-api` (default server: https://saavn.sumit.co).
 
 ## Build the APK (GitHub Actions)
-1. Create a GitHub repo and upload **everything inside this folder** (keep `.github/workflows/build.yml`).
-2. Actions tab -> **Build APK** -> *Run workflow*. Download artifact **SaavnDL-apk**.
-3. Gradle 8.9 + JDK 17 are set up by the workflow (no wrapper jar needed). If the optional LAME
-   dependency can't be resolved the workflow retries without it (MP3 then falls back to tagged M4A).
+1. Upload **everything inside this folder** to your repo (keep `.github/workflows/build.yml` and `scripts/`).
+2. Every push to `main` (or *Run workflow*) builds the APK **and publishes it as a GitHub Release**
+   (`v1.0.<run number>`, file `SaavnDL.apk`). The latest APK is always at
+   `https://github.com/<owner>/<repo>/releases/latest`. It is also attached to the run as an artifact.
+3. The workflow first cross-compiles LAME (`scripts/build_lame.sh`) for the **MP3 encoder**. If that step fails the app is
+   built without it (MP3 then falls back to tagged M4A).
 
-## Publish releases + keep the same signature (recommended)
-Create a keystore once (on any computer with Java):
-```
-keytool -genkeypair -v -keystore release.jks -alias saavndl -keyalg RSA -keysize 2048 -validity 10000
-base64 -w0 release.jks      # copy the output
-```
-Repo -> Settings -> Secrets and variables -> Actions -> add: `KEYSTORE_BASE64` (the base64 text),
-`KEYSTORE_PASSWORD`, `KEY_ALIAS` (saavndl), `KEY_PASSWORD`.
-Then push a tag such as `v1.0.1` (`git tag v1.0.1 && git push --tags`): the workflow builds a **signed release APK**
-and attaches it to a GitHub Release. In the app: Settings -> Updates -> enter `owner/repo` to get update prompts.
-Always keep the same keystore, otherwise Android will refuse to install updates over the old app.
+Add the signing secrets once (see GITHUB_SECRETS.txt) so every build has the same signature and updates install over the old app.
 
 ## Features
+- Discover: latest releases (albums, trending, playlists by language), live search suggestions with posters,
+- Import public Spotify playlists/albums (matched on JioSaavn, saved as a playlist, downloadable)
+- Import songs already on the phone; library auto-syncs with storage (deleted files disappear, old downloads are restored)
 - Search songs/albums/playlists/artists, live suggestions, language filter, "For you" from your favorites
 - Paste or share a JioSaavn link into the app; open artist pages, download all albums
 - Full player: background playback, lock-screen/notification controls, seek, shuffle, repeat, sleep timer,
