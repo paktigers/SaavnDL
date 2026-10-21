@@ -18,6 +18,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -39,8 +40,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import com.saavndl.app.data.ApkInstaller
 import com.saavndl.app.data.LibrarySync
 import com.saavndl.app.data.SettingsStore
 import com.saavndl.app.data.Stores
@@ -152,17 +156,41 @@ fun AppRoot(vm: AppVM, incoming: String?, onConsumed: () -> Unit) {
             )
         }
         vm.update?.let { u ->
+            val file = vm.updateFile
             AlertDialog(
-                onDismissRequest = { vm.update = null },
+                onDismissRequest = { if (!vm.updateBusy) vm.dismissUpdate() },
                 title = { Text("Update ${u.tag} available") },
-                text = { Text(u.notes.ifBlank { "A new version of SaavnDL is ready to download." }) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                        vm.update = null
-                    }) { Text("Download") }
+                text = {
+                    Column {
+                        Text(u.notes.ifBlank { "A new version of SaavnDL is ready." })
+                        if (vm.updateBusy) {
+                            androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 12.dp))
+                            LinearProgressIndicator(progress = { vm.updateProgress }, modifier = Modifier.fillMaxWidth())
+                            Text("Downloading ${(vm.updateProgress * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (file != null) {
+                            androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 12.dp))
+                            Text("Download complete. Tap Install to update the app.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                        }
+                        if (vm.updateError.isNotBlank()) {
+                            androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 8.dp))
+                            Text(vm.updateError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
+                    }
                 },
-                dismissButton = { TextButton(onClick = { vm.update = null }) { Text("Later") } }
+                confirmButton = {
+                    when {
+                        file != null -> TextButton(onClick = {
+                            vm.updateError = if (ApkInstaller.install(ctx, file)) "" else "Allow \"Install unknown apps\" for SaavnDL, come back and tap Install again."
+                        }) { Text("Install") }
+                        vm.updateBusy -> TextButton(onClick = { vm.cancelUpdate() }) { Text("Cancel") }
+                        u.url.endsWith(".apk", true) -> TextButton(onClick = { vm.downloadUpdate(ctx) }) { Text("Download and install") }
+                        else -> TextButton(onClick = {
+                            runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        }) { Text("Open release page") }
+                    }
+                },
+                dismissButton = { if (!vm.updateBusy) TextButton(onClick = { vm.dismissUpdate() }) { Text("Later") } }
             )
         }
     }

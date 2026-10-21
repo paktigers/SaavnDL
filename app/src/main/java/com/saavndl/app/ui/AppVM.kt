@@ -3,6 +3,7 @@ package com.saavndl.app.ui
 import android.content.Context
 import android.net.Uri
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -23,6 +24,10 @@ import com.saavndl.app.data.Stores
 import com.saavndl.app.data.UpdateInfo
 import com.saavndl.app.data.Updater
 import com.saavndl.app.download.Downloads
+import com.saavndl.app.download.Http
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -46,6 +51,11 @@ class AppVM : ViewModel() {
     var forYouFrom by mutableStateOf("")
     var update by mutableStateOf<UpdateInfo?>(null)
     var updateStatus by mutableStateOf("")
+    var updateBusy by mutableStateOf(false)
+    var updateProgress by mutableFloatStateOf(0f)
+    var updateFile by mutableStateOf<File?>(null)
+    var updateError by mutableStateOf("")
+    private var updateJob: Job? = null
 
     // live suggestions while typing
     var sugSongs by mutableStateOf<List<Song>>(emptyList())
@@ -239,6 +249,37 @@ class AppVM : ViewModel() {
                 if (manual) updateStatus = e.message ?: "Could not check for updates"
             }
         }
+    }
+
+    /** Downloads the update APK inside the app; the dialog then offers "Install". */
+    fun downloadUpdate(ctx: Context) {
+        val u = update ?: return
+        updateJob?.cancel()
+        updateBusy = true; updateProgress = 0f; updateError = ""; updateFile = null
+        updateJob = viewModelScope.launch {
+            try {
+                val dir = File(ctx.cacheDir, "updates").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
+                val f = File(dir, "SaavnDL-${u.tag}.apk")
+                withContext(Dispatchers.IO) { Http.download(u.url, f, { p -> updateProgress = p }) }
+                updateFile = f
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                updateError = e.message ?: "Download failed"
+            } finally {
+                updateBusy = false
+            }
+        }
+    }
+
+    fun cancelUpdate() {
+        updateJob?.cancel()
+        updateBusy = false; updateProgress = 0f
+    }
+
+    fun dismissUpdate() {
+        cancelUpdate()
+        update = null; updateFile = null; updateError = ""
     }
 
     // ------------------------------------------------------------------ batch import

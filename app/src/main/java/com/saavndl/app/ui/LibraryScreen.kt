@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -74,7 +76,8 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun LibraryScreen() {
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val pager = rememberPagerState(pageCount = { 3 })
+    val scope = rememberCoroutineScope()
     val items by Stores.library.items.collectAsState()
     val favs by Stores.favorites.items.collectAsState()
     val lists by Stores.playlists.items.collectAsState()
@@ -87,18 +90,21 @@ fun LibraryScreen() {
             )
         }
         Spacer(Modifier.height(10.dp))
-        TabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.background) {
-            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(tr("Downloaded")) })
-            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(tr("Favorites")) })
-            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text(tr("Playlists")) })
+        TabRow(selectedTabIndex = pager.currentPage, containerColor = MaterialTheme.colorScheme.background) {
+            Tab(selected = pager.currentPage == 0, onClick = { scope.launch { pager.animateScrollToPage(0) } }, text = { Text(tr("Downloaded")) })
+            Tab(selected = pager.currentPage == 1, onClick = { scope.launch { pager.animateScrollToPage(1) } }, text = { Text(tr("Favorites")) })
+            Tab(selected = pager.currentPage == 2, onClick = { scope.launch { pager.animateScrollToPage(2) } }, text = { Text(tr("Playlists")) })
         }
-        when (tab) {
-            0 -> Downloaded(items)
-            1 -> {
-                if (favs.isEmpty()) EmptyState(Icons.Filled.Favorite, tr("No favorites yet"), "Tap the heart on any song to keep it here.")
-                else SongsList(favs, Modifier.fillMaxSize())
+        // swipe left / right to switch between Downloaded, Favorites and Playlists
+        HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
+            when (page) {
+                0 -> Downloaded(items)
+                1 -> {
+                    if (favs.isEmpty()) EmptyState(Icons.Filled.Favorite, tr("No favorites yet"), "Tap the heart on any song to keep it here.")
+                    else SongsList(favs, Modifier.fillMaxSize())
+                }
+                else -> PlaylistsTab()
             }
-            else -> PlaylistsTab()
         }
     }
 }

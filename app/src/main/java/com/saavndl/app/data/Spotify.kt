@@ -78,30 +78,71 @@ object SpotifyApi {
     private fun cleanTitle(t: String): String =
         t.replace(Regex("\\s*[\\(\\[].*?[\\)\\]]"), "").replace(Regex("\\s+-\\s+.*$"), "").trim().ifBlank { t }
 
-    private fun score(t: SpTrack, s: Song): Int {
-        val a = norm(cleanTitle(t.title)); val b = norm(cleanTitle(s.name))
-        var sc = when {
-            a.isEmpty() || b.isEmpty() -> 0
-            a == b -> 4
-            b.contains(a) || a.contains(b) -> 2
+    private fun artistList(s: String): List<String> =
+        s.split(",", "&", "•", ";", " x ", " feat. ", " ft. ", " with ").map { it.trim() }.filter { it.isNotBlank() }
+
+    private fun titleScore(a: String, b: String): Int = when {
+        a.isEmpty() || b.isEmpty() -> 0
+        a == b -> 4
+        a.startsWith(b) || b.startsWith(a) -> 3
+        a.contains(b) || b.contains(a) -> 2
+        else -> 0
+    }
+
+    /** true when at least one Spotify artist is also an artist of the JioSaavn song. */
+    private fun artistMatches(t: SpTrack, s: Song): Boolean {
+        val want = artistList(t.artist).map { norm(it) }.filter { it.length >= 3 }
+        if (want.isEmpty()) return true // Spotify gave no artist, nothing to verify
+        val have = artistList(s.artists).map { norm(it) }.filter { it.length >= 3 }
+        val haveAll = norm(s.artists)
+        return want.any { w -> haveAll.contains(w) || have.any { h -> h.contains(w) || w.contains(h) } }
+    }
+
+    private val VERSION_WORDS = listOf("karaoke", "instrumental", "cover", "lofi", "slowed", "reverb", "8d", "remix", "mashup", "unplugged", "acoustic", "sped", "reprise")
+
+    private class Cand(val song: Song, val total: Int)
+
+    /** Accepts a JioSaavn song only if the title AND the singer agree (or the title is identical and the length is almost the same). */
+    private fun evaluate(t: SpTrack, s: Song): Cand? {
+        val ts = titleScore(norm(cleanTitle(t.title)), norm(cleanTitle(s.name)))
+        if (ts < 2) return null
+        val am = artistMatches(t, s)
+        val diff = if (t.durationMs > 0 && s.duration > 0) abs(t.durationMs / 1000 - s.duration) else -1L
+        if (!am && !(ts == 4 && diff in 0L..2L)) return null
+        var total = ts * 2 + (if (am) 8 else 0)
+        total += when {
+            diff in 0L..3L -> 4
+            diff in 4L..8L -> 1
+            diff > 20 -> -3
             else -> 0
         }
-        val artists = t.artist.split(",", "&", "•").map { norm(it) }.filter { it.isNotEmpty() }
-        val songArtists = norm(s.artists)
-        if (artists.any { songArtists.contains(it) }) sc += 2
-        if (t.durationMs > 0 && s.duration > 0 && abs(t.durationMs / 1000 - s.duration) <= 6) sc += 1
-        return sc
+        val want = (t.title).lowercase()
+        val have = (s.name + " " + s.album).lowercase()
+        for (w in VERSION_WORDS) if (have.contains(w) && !want.contains(w)) total -= 4
+        return Cand(s, total)
     }
 
     suspend fun match(t: SpTrack): Song? {
-        val first = t.artist.split(",", "&", "•").firstOrNull()?.trim().orEmpty()
-        val queries = listOf("${cleanTitle(t.title)} $first".trim(), cleanTitle(t.title))
+        val artists = artistList(t.artist)
+        val first = artists.firstOrNull().orEmpty()
+        val title = cleanTitle(t.title)
+        val queries = listOf(
+            "$title $first".trim(),
+            "$first $title".trim(),
+            "$title ${artists.joinToString(" ")}".trim(),
+            title
+        ).distinct()
+        val seen = HashMap<String, Cand>()
         for (q in queries) {
-            val res = try { SaavnApi.searchSongs(q, 0, 8).second } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
-            val best = res.map { it to score(t, it) }.filter { it.second >= 3 }.maxByOrNull { it.second }
-            if (best != null) return best.first
+            val res = try { SaavnApi.searchSongs(q, 0, 10).second } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+            for (song in res) {
+                if (seen.containsKey(song.id)) continue
+                evaluate(t, song)?.let { seen[song.id] = it }
+            }
+            // stop searching as soon as we have a strong match (same title + same singer)
+            if (seen.values.any { it.total >= 16 }) break
         }
-        return null
+        return seen.values.maxByOrNull { it.total }?.song
     }
 
     suspend fun matchAll(list: SpList, onProgress: (done: Int, total: Int) -> Unit): List<SpMatch> = coroutineScope {

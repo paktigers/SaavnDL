@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -65,7 +66,6 @@ import androidx.compose.ui.unit.sp
 import com.saavndl.app.data.AppLog
 import com.saavndl.app.data.DEFAULT_BASE_URL
 import com.saavndl.app.data.LibrarySync
-import com.saavndl.app.data.normalizeRepo
 import com.saavndl.app.data.AudioFormat
 import com.saavndl.app.data.Backup
 import com.saavndl.app.data.SaavnApi
@@ -141,7 +141,6 @@ fun SettingsScreen(vm: AppVM) {
     val host = LocalHost.current
     val scope = rememberCoroutineScope()
     var url by remember(s.baseUrl) { mutableStateOf(s.baseUrl) }
-    var repo by remember(s.repo) { mutableStateOf(s.repo) }
     var apiStatus by remember { mutableStateOf("") }
     var showLog by remember { mutableStateOf(false) }
     val mp3Ok = remember { Mp3Encoder.isAvailable() }
@@ -234,12 +233,15 @@ fun SettingsScreen(vm: AppVM) {
 
         SectionCard("Updates", Icons.Filled.SystemUpdate) {
             Text("Installed version: $version", style = MaterialTheme.typography.bodyMedium)
-            OutlinedTextField(value = repo, onValueChange = { repo = it }, singleLine = true, label = { Text("GitHub repo (owner/name or URL)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
-            ToggleRow("Check automatically", "Once a day when the app starts", s.autoUpdate) { v -> SettingsStore.update { it.copy(autoUpdate = v) } }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = { val r = normalizeRepo(repo); repo = r; SettingsStore.update { it.copy(repo = r) }; vm.checkUpdate(ctx, true) }) { Text("Check for updates") }
-            }
+            Button(onClick = { vm.checkUpdate(ctx, true) }) { Text("Check for updates") }
             if (vm.updateStatus.isNotBlank()) Text(vm.updateStatus, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                Modifier.fillMaxWidth().clickable { SettingsStore.update { it.copy(autoUpdate = !s.autoUpdate) } },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(checked = s.autoUpdate, onCheckedChange = { v -> SettingsStore.update { it.copy(autoUpdate = v) } })
+                Text("Check automatically", style = MaterialTheme.typography.bodyLarge)
+            }
         }
 
         SectionCard("Storage", Icons.Filled.Storage) {
