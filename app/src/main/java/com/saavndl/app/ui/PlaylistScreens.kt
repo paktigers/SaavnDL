@@ -130,6 +130,7 @@ fun PlaylistScreen(id: String, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var dragKey by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
+    var openKey by remember { mutableStateOf<String?>(null) }
     fun commit() {
         val order = local
         Stores.playlists.update { l -> l.map { if (it.id == id) it.copy(songs = order) else it } }
@@ -155,12 +156,18 @@ fun PlaylistScreen(id: String, onBack: () -> Unit) {
         if (local.isEmpty()) {
             EmptyState(Icons.Filled.PlaylistPlay, "Empty playlist", "Open the menu of any song and choose \"Add to playlist\".")
         } else {
-            Text("Long-press a song and drag it to reorder", Modifier.padding(horizontal = 20.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Long-press and drag to reorder · swipe left to remove", Modifier.padding(horizontal = 20.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             LazyColumn(Modifier.fillMaxSize(), state = listState) {
                 items(local, key = { it.id }) { s ->
                     val dragging = dragKey == s.id
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                    SwipeActionRow(
+                        key = s.id, openKey = openKey, onOpenChange = { openKey = it },
+                        actions = listOf(SwipeAction(Icons.Filled.Delete, "Remove", Color(0xFFD64545)) {
+                            local = local.filter { x -> x.id != s.id }
+                            commit()
+                        }),
+                        background = if (dragging) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.background,
+                        modifier = Modifier.padding(horizontal = 8.dp)
                             .then(if (dragging) Modifier else Modifier.animateItem())
                             .zIndex(if (dragging) 1f else 0f)
                             .graphicsLayer {
@@ -168,11 +175,9 @@ fun PlaylistScreen(id: String, onBack: () -> Unit) {
                                 scaleX = if (dragging) 1.03f else 1f
                                 scaleY = if (dragging) 1.03f else 1f
                             }
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(if (dragging) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent)
                             .pointerInput(s.id) {
                                 detectDragGesturesAfterLongPress(
-                                    onDragStart = { dragKey = s.id; dragOffset = 0f },
+                                    onDragStart = { dragKey = s.id; dragOffset = 0f; openKey = null },
                                     onDrag = { change, amount ->
                                         change.consume()
                                         dragOffset += amount.y
@@ -203,21 +208,21 @@ fun PlaylistScreen(id: String, onBack: () -> Unit) {
                                     onDragCancel = { dragKey = null; dragOffset = 0f; commit() }
                                 )
                             }
-                            .clickable { PlayerController.playQueue(local.map { it.toTrack() }, local.indexOfFirst { x -> x.id == s.id }.coerceAtLeast(0)) }
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Cover(s.thumb, 50.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(s.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
-                            Text(s.artists, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable { PlayerController.playQueue(local.map { it.toTrack() }, local.indexOfFirst { x -> x.id == s.id }.coerceAtLeast(0)) }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Cover(s.thumb, 50.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(s.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
+                                Text(s.artists, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Icon(Icons.Filled.DragHandle, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 4.dp))
                         }
-                        IconButton(onClick = {
-                            local = local.filter { x -> x.id != s.id }
-                            commit()
-                        }) { Icon(Icons.Filled.Close, "Remove") }
-                        Icon(Icons.Filled.DragHandle, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 4.dp))
                     }
                 }
                 item(key = "space") { Spacer(Modifier.height(24.dp)) }

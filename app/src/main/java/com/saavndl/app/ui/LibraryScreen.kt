@@ -125,6 +125,7 @@ private fun Downloaded(items: List<LibItem>) {
     var delete by remember { mutableStateOf<LibItem?>(null) }
     var edit by remember { mutableStateOf<LibItem?>(null) }
     var tools by remember { mutableStateOf(false) }
+    var openKey by remember { mutableStateOf<String?>(null) }
     var dupDialog by remember { mutableStateOf<List<List<LibItem>>?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -213,33 +214,40 @@ private fun Downloaded(items: List<LibItem>) {
         }
         itemsIndexed(shown, key = { i, li -> "${li.uri}_$i" }) { i, li ->
             val isCur = cur?.source == li.uri
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(RoundedCornerShape(16.dp))
-                    .clickable { if (isCur) PlayerController.toggle() else PlayerController.playQueue(tracks(), i) }
-                    .padding(horizontal = 8.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically
+            SwipeActionRow(
+                key = li.uri, openKey = openKey, onOpenChange = { openKey = it },
+                actions = buildList {
+                    if (!li.songId.startsWith("local_")) add(SwipeAction(Icons.Filled.Edit, "Edit", Color(0xFF4B5BD6)) { edit = li })
+                    add(SwipeAction(Icons.Filled.Share, "Share", TealDeep) {
+                        val send = Intent(Intent.ACTION_SEND).setType(if (li.format == "MP3") "audio/mpeg" else "audio/mp4")
+                            .putExtra(Intent.EXTRA_STREAM, Uri.parse(li.uri)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        ctx.startActivity(Intent.createChooser(send, "Share song").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    })
+                    add(SwipeAction(Icons.Filled.Delete, "Delete", Color(0xFFD64545)) { delete = li })
+                },
+                modifier = Modifier.padding(horizontal = 8.dp)
             ) {
-                Cover(li.thumb, 54.dp)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(li.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall,
-                        color = if (isCur) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-                    Text(li.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                            Text(li.format, Modifier.padding(horizontal = 6.dp, vertical = 1.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clickable { if (isCur) PlayerController.toggle() else PlayerController.playQueue(tracks(), i) }
+                        .padding(horizontal = 8.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Cover(li.thumb, 54.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(li.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall,
+                            color = if (isCur) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                        Text(li.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                                Text(li.format, Modifier.padding(horizontal = 6.dp, vertical = 1.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            Text(fmtSize(li.bytes), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (isCur && playing) Icon(Icons.Filled.GraphicEq, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.height(14.dp))
                         }
-                        Text(fmtSize(li.bytes), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (isCur && playing) Icon(Icons.Filled.GraphicEq, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.height(14.dp))
                     }
                 }
-                if (!li.songId.startsWith("local_")) IconButton(onClick = { edit = li }) { Icon(Icons.Filled.Edit, tr("Edit tags"), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                IconButton(onClick = {
-                    val send = Intent(Intent.ACTION_SEND).setType(if (li.format == "MP3") "audio/mpeg" else "audio/mp4")
-                        .putExtra(Intent.EXTRA_STREAM, Uri.parse(li.uri)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    ctx.startActivity(Intent.createChooser(send, "Share song").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }) { Icon(Icons.Filled.Share, "Share", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                IconButton(onClick = { delete = li }) { Icon(Icons.Filled.Delete, "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
         item { Spacer(Modifier.height(24.dp)) }

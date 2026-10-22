@@ -1,9 +1,4 @@
 # SaavnDL (Android)
-[Live design preview](https://paktigers.github.io/SaavnDL/)
-## Screenshots
-| Discover | Player | Downloads | Settings | Spotify |
-|---|---|---|---|---|
-| <img src="docs/screenshots/Discover.png" width="240"> | <img src="docs/screenshots/Player.png" width="240"> | <img src="docs/screenshots/Downloads.png" width="240"> | <img src="docs/screenshots/Settings.png" width="240"> | <img src="docs/screenshots/Spotify.png" width="240"> |
 
 Jetpack Compose app on top of the open-source `jiosaavn-api` (default server: https://saavn.sumit.co).
 
