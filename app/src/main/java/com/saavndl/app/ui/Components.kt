@@ -45,12 +45,14 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -101,6 +103,9 @@ sealed class Route {
     data class Similar(val song: Song) : Route()
     object NowPlaying : Route()
     data class Playlist(val id: String) : Route()
+    object Favorites : Route()
+    object Downloaded : Route()
+    object PlayQueue : Route()
     data class SpotifyImport(val link: String) : Route()
     object ImportDevice : Route()
 }
@@ -192,25 +197,24 @@ fun ErrorState(message: String, onRetry: () -> Unit) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongRow(
-    song: Song, selected: Boolean, isCurrent: Boolean, playing: Boolean, fav: Boolean,
-    dl: DlTask?, inLibrary: Boolean, onCancelDl: () -> Unit,
-    onClick: () -> Unit, onLong: () -> Unit, onDownload: () -> Unit, onFav: () -> Unit,
-    onInfo: () -> Unit, onSimilar: () -> Unit, onShare: () -> Unit, onCopy: () -> Unit,
-    onAddPlaylist: () -> Unit, onPlayNext: () -> Unit, onQueue: () -> Unit
+    song: Song, selecting: Boolean, selected: Boolean, isCurrent: Boolean, playing: Boolean, fav: Boolean,
+    dl: DlTask?, inLibrary: Boolean,
+    onClick: () -> Unit, onLong: () -> Unit, onDownload: () -> Unit, onCancelDl: () -> Unit, onFav: () -> Unit, onMenu: () -> Unit
 ) {
-    var menu by remember { mutableStateOf(false) }
-    val bg = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = .6f) else Color.Transparent
+    val bg = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = .5f) else Color.Transparent
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(RoundedCornerShape(16.dp)).background(bg)
             .combinedClickable(onClick = onClick, onLongClick = onLong)
             .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (selecting) {
+            Checkbox(checked = selected, onCheckedChange = { onClick() })
+            Spacer(Modifier.width(2.dp))
+        }
         Box {
             Cover(song.thumb, 54.dp)
-            if (selected) Box(Modifier.size(54.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(.55f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.primary)
-            } else if (isCurrent) Box(Modifier.size(54.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(.45f)), contentAlignment = Alignment.Center) {
+            if (isCurrent) Box(Modifier.size(54.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(.45f)), contentAlignment = Alignment.Center) {
                 Icon(if (playing) Icons.Filled.GraphicEq else Icons.Filled.Pause, null, tint = Color.White)
             }
         }
@@ -218,42 +222,39 @@ fun SongRow(
         Column(Modifier.weight(1f)) {
             Text(song.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall,
                 color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-            val sub = listOf(song.artists, song.album).filter { it.isNotBlank() }.joinToString(" · ")
-            Text(sub, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (inLibrary) {
+                    Icon(Icons.Filled.CheckCircle, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(4.dp))
+                }
+                val sub = listOf(song.artists, song.album).filter { it.isNotBlank() }.joinToString(" · ")
+                Text(sub, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Text(fmtDur(song.duration) + if (song.year.isNotBlank()) " · ${song.year}" else "", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .7f))
         }
-        val d = dl
-        val busy = d != null && d.active
-        IconButton(onClick = { if (busy) onCancelDl() else onDownload() }) {
-            when {
-                busy -> Box(contentAlignment = Alignment.Center) {
-                    if (d != null && d.status == DlStatus.DOWNLOADING && d.progress > 0f)
-                        CircularProgressIndicator(progress = { d.progress }, modifier = Modifier.size(26.dp), strokeWidth = 2.5.dp)
-                    else CircularProgressIndicator(modifier = Modifier.size(26.dp), strokeWidth = 2.5.dp)
-                    Icon(Icons.Filled.Close, "Cancel", Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!selecting) {
+            val d = dl
+            val busy = d != null && d.active
+            IconButton(onClick = { if (busy) onCancelDl() else onDownload() }) {
+                when {
+                    busy -> Box(contentAlignment = Alignment.Center) {
+                        if (d != null && d.status == DlStatus.DOWNLOADING && d.progress > 0f)
+                            CircularProgressIndicator(progress = { d.progress }, modifier = Modifier.size(26.dp), strokeWidth = 2.5.dp)
+                        else CircularProgressIndicator(modifier = Modifier.size(26.dp), strokeWidth = 2.5.dp)
+                        Icon(Icons.Filled.Close, "Cancel", Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    d != null && d.status == DlStatus.FAILED -> Icon(Icons.Filled.Refresh, "Retry", tint = MaterialTheme.colorScheme.error)
+                    inLibrary || (d != null && (d.status == DlStatus.DONE || d.status == DlStatus.SKIPPED)) ->
+                        Icon(Icons.Filled.CheckCircle, "Downloaded", tint = MaterialTheme.colorScheme.primary)
+                    else -> Icon(Icons.Filled.Download, "Download", tint = MaterialTheme.colorScheme.primary)
                 }
-                d != null && d.status == DlStatus.FAILED -> Icon(Icons.Filled.Refresh, "Retry", tint = MaterialTheme.colorScheme.error)
-                inLibrary || (d != null && (d.status == DlStatus.DONE || d.status == DlStatus.SKIPPED)) ->
-                    Icon(Icons.Filled.CheckCircle, "Downloaded", tint = MaterialTheme.colorScheme.primary)
-                else -> Icon(Icons.Filled.Download, "Download", tint = MaterialTheme.colorScheme.primary)
             }
-        }
-        IconButton(onClick = onFav) {
-            Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "Favorite",
-                tint = if (fav) Color(0xFFFF5C8A) else MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text(tr("Add to playlist")) }, leadingIcon = { Icon(Icons.Filled.PlaylistAdd, null) }, onClick = { menu = false; onAddPlaylist() })
-                DropdownMenuItem(text = { Text(tr("Play next")) }, leadingIcon = { Icon(Icons.Filled.SkipNext, null) }, onClick = { menu = false; onPlayNext() })
-                DropdownMenuItem(text = { Text(tr("Add to queue")) }, leadingIcon = { Icon(Icons.Filled.QueueMusic, null) }, onClick = { menu = false; onQueue() })
-                DropdownMenuItem(text = { Text(tr("Song info")) }, leadingIcon = { Icon(Icons.Filled.Info, null) }, onClick = { menu = false; onInfo() })
-                DropdownMenuItem(text = { Text(tr("Similar songs")) }, leadingIcon = { Icon(Icons.Filled.Layers, null) }, onClick = { menu = false; onSimilar() })
-                DropdownMenuItem(text = { Text(tr("Share link")) }, leadingIcon = { Icon(Icons.Filled.Share, null) }, onClick = { menu = false; onShare() })
-                DropdownMenuItem(text = { Text(tr("Copy link")) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = { menu = false; onCopy() })
+            IconButton(onClick = onFav) {
+                Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "Favorite",
+                    tint = if (fav) Color(0xFFFF5C8A) else MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            IconButton(onClick = onMenu) { Icon(Icons.Filled.MoreVert, "More", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }
@@ -292,7 +293,9 @@ fun SongsList(
     numbered: Boolean = false,
     header: (@Composable () -> Unit)? = null,
     footer: (@Composable () -> Unit)? = null,
-    onEnd: (() -> Unit)? = null
+    onEnd: (() -> Unit)? = null,
+    extraMenu: (Song) -> List<MenuItem> = { emptyList() },
+    onRemoveSelected: ((List<Song>) -> Unit)? = null
 ) {
     val host = LocalHost.current
     val ctx = LocalContext.current
@@ -304,7 +307,7 @@ fun SongsList(
     val libIds = remember(lib) { lib.map { it.songId }.toSet() }
     val cur by PlayerController.current.collectAsState()
     val playing by PlayerController.playing.collectAsState()
-    var info by remember { mutableStateOf<Song?>(null) }
+    var menuSong by remember { mutableStateOf<Song?>(null) }
     var addTo by remember { mutableStateOf<List<Song>?>(null) }
     val state = rememberLazyListState()
     val lastVisible by remember { derivedStateOf { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 } }
@@ -328,6 +331,9 @@ fun SongsList(
                     IconButton(onClick = { sel.ids.clear(); sel.ids.addAll(songs.indices.toList()) }) { Icon(Icons.Filled.SelectAll, "Select all") }
                     IconButton(onClick = { addTo = sel.ids.sorted().map { songs[it] }; sel.clear() }) { Icon(Icons.Filled.PlaylistAdd, "Add to playlist") }
                     IconButton(onClick = { download(sel.ids.sorted()); sel.clear() }) { Icon(Icons.Filled.Download, "Download selected") }
+                    if (onRemoveSelected != null) IconButton(onClick = {
+                        onRemoveSelected(sel.ids.sorted().map { songs[it] }); sel.clear()
+                    }) { Icon(Icons.Filled.Delete, "Remove selected", tint = MaterialTheme.colorScheme.error) }
                 }
             }
         }
@@ -335,10 +341,9 @@ fun SongsList(
             if (header != null) item(key = "header") { header() }
             itemsIndexed(songs, key = { i, s -> "${s.id}_$i" }) { i, s ->
                 SongRow(
-                    song = s, selected = i in sel.ids, isCurrent = cur?.id == s.id, playing = playing,
+                    song = s, selecting = sel.active, selected = i in sel.ids, isCurrent = cur?.id == s.id, playing = playing,
                     fav = favs.any { it.id == s.id },
                     dl = taskBy[s.id], inLibrary = s.id in libIds,
-                    onCancelDl = { taskBy[s.id]?.let { Downloads.cancel(it.id) } },
                     onClick = {
                         if (sel.active) sel.toggle(i)
                         else if (cur?.id == s.id) PlayerController.toggle()
@@ -351,24 +356,16 @@ fun SongsList(
                         else if (s.id in libIds) host.snack("Already in your library")
                         else download(listOf(i))
                     },
+                    onCancelDl = { taskBy[s.id]?.let { Downloads.cancel(it.id) } },
                     onFav = { Stores.toggleFavorite(s) },
-                    onInfo = { info = s },
-                    onSimilar = { host.push(Route.Similar(s)) },
-                    onAddPlaylist = { addTo = listOf(s) },
-                    onPlayNext = { PlayerController.playNext(s.toTrack()); host.snack("Will play next") },
-                    onQueue = { PlayerController.addToQueue(s.toTrack()); host.snack("Added to queue") },
-                    onShare = { shareText(ctx, "${s.name} - ${s.artists}\n${s.url}") },
-                    onCopy = {
-                        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        cm.setPrimaryClip(android.content.ClipData.newPlainText("link", s.url)); host.snack("Link copied")
-                    }
+                    onMenu = { menuSong = s }
                 )
             }
             if (footer != null) item(key = "footer") { footer() }
             item(key = "space") { Spacer(Modifier.height(24.dp)) }
         }
     }
-    info?.let { SongInfoDialog(it) { info = null } }
+    menuSong?.let { m -> SongMenu(m, extraMenu(m)) { menuSong = null } }
     addTo?.let { AddToPlaylistDialog(it) { addTo = null } }
 }
 

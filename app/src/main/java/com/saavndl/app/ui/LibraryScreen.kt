@@ -1,345 +1,173 @@
 package com.saavndl.app.ui
 
-import android.content.Intent
-import android.net.Uri
-import android.provider.MediaStore
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.saavndl.app.data.LibItem
 import com.saavndl.app.data.LibrarySync
 import com.saavndl.app.data.Stores
 import com.saavndl.app.data.fmtSize
 import com.saavndl.app.data.tr
-import com.saavndl.app.download.TagEditor
-import com.saavndl.app.player.PlayerController
-import com.saavndl.app.player.Track
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private class LibEntry(
+    val key: String, val title: String, val sub: String, val kind: Int, // 0 playlist, 1 liked songs, 2 downloaded
+    val covers: List<String>, val onClick: () -> Unit
+)
+
+@Composable
+private fun EntryCover(e: LibEntry, modifier: Modifier, radius: androidx.compose.ui.unit.Dp = 10.dp) {
+    when (e.kind) {
+        1 -> HeartCover(modifier, radius, 30.dp)
+        2 -> DownloadCover(modifier, radius, 34.dp)
+        else -> MosaicCover(e.covers, modifier, radius)
+    }
+}
+
+/** "Your Library" - looks like the Spotify library: filter pills, sort + grid toggle, and a list of playlists. */
 @Composable
 fun LibraryScreen() {
-    val pager = rememberPagerState(pageCount = { 3 })
+    val host = LocalHost.current
+    val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val items by Stores.library.items.collectAsState()
     val favs by Stores.favorites.items.collectAsState()
     val lists by Stores.playlists.items.collectAsState()
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp)) {
-            Text(tr("Library"), style = MaterialTheme.typography.headlineMedium)
-            Text(
-                "${items.size} downloaded · ${fmtSize(items.sumOf { it.bytes })} · ${favs.size} favorites · ${lists.size} playlists",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-        TabRow(selectedTabIndex = pager.currentPage, containerColor = MaterialTheme.colorScheme.background) {
-            Tab(selected = pager.currentPage == 0, onClick = { scope.launch { pager.animateScrollToPage(0) } }, text = { Text(tr("Downloaded")) })
-            Tab(selected = pager.currentPage == 1, onClick = { scope.launch { pager.animateScrollToPage(1) } }, text = { Text(tr("Favorites")) })
-            Tab(selected = pager.currentPage == 2, onClick = { scope.launch { pager.animateScrollToPage(2) } }, text = { Text(tr("Playlists")) })
-        }
-        // swipe left / right to switch between Downloaded, Favorites and Playlists
-        HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
-            when (page) {
-                0 -> Downloaded(items)
-                1 -> {
-                    if (favs.isEmpty()) EmptyState(Icons.Filled.Favorite, tr("No favorites yet"), "Tap the heart on any song to keep it here.")
-                    else SongsList(favs, Modifier.fillMaxSize())
-                }
-                else -> PlaylistsTab()
+    var pill by rememberSaveable { mutableIntStateOf(-1) }      // -1 = everything
+    var sort by rememberSaveable { mutableIntStateOf(0) }       // 0 = recents, 1 = A-Z
+    var grid by rememberSaveable { mutableStateOf(false) }
+    var search by remember { mutableStateOf(false) }
+    var q by remember { mutableStateOf("") }
+    var plus by remember { mutableStateOf(false) }
+    var sortMenu by remember { mutableStateOf(false) }
+    var creating by remember { mutableStateOf(false) }
+
+    val entries = buildList<LibEntry> {
+        if (pill == -1 || pill == 2) add(LibEntry("fav", "Liked Songs", "Playlist • ${favs.size} songs", 1, emptyList()) { host.push(Route.Favorites) })
+        if (pill == -1 || pill == 1) add(LibEntry("dl", "Downloaded", "${items.size} songs • ${fmtSize(items.sumOf { it.bytes })}", 2, emptyList()) { host.push(Route.Downloaded) })
+        if (pill == -1 || pill == 0) {
+            val pls = if (sort == 1) lists.sortedBy { it.name.lowercase() } else lists
+            pls.forEach { p ->
+                add(LibEntry(p.id, p.name, "Playlist • ${p.songs.size} songs", 0, p.songs.take(4).map { it.thumb }) { host.push(Route.Playlist(p.id)) })
             }
         }
-    }
-}
+    }.filter { q.isBlank() || it.title.contains(q, true) }
 
-private fun norm(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
-
-private fun dupGroups(items: List<LibItem>): List<List<LibItem>> =
-    items.groupBy { norm(it.title) + "|" + norm(it.artist.split(",").first()) }.values.filter { it.size > 1 }
-
-@Composable
-private fun Downloaded(items: List<LibItem>) {
-    val ctx = LocalContext.current
-    val host = LocalHost.current
-    val cur by PlayerController.current.collectAsState()
-    val playing by PlayerController.playing.collectAsState()
-    var filter by remember { mutableStateOf("") }
-    var sort by rememberSaveable { mutableIntStateOf(0) }
-    var delete by remember { mutableStateOf<LibItem?>(null) }
-    var edit by remember { mutableStateOf<LibItem?>(null) }
-    var tools by remember { mutableStateOf(false) }
-    var openKey by remember { mutableStateOf<String?>(null) }
-    var dupDialog by remember { mutableStateOf<List<List<LibItem>>?>(null) }
-    val scope = rememberCoroutineScope()
-
-    val filtered = items.filter { filter.isBlank() || it.title.contains(filter, true) || it.artist.contains(filter, true) || it.album.contains(filter, true) }
-    val shown = when (sort) {
-        1 -> filtered.sortedBy { it.title.lowercase() }
-        2 -> filtered.sortedBy { it.artist.lowercase() }
-        3 -> filtered.sortedByDescending { it.bytes }
-        else -> filtered.sortedByDescending { it.time }
-    }
-
-    if (items.isEmpty()) {
-        EmptyState(Icons.Filled.LibraryMusic, tr("Nothing here yet"), "Songs you download appear here and in your Music/SaavnDL folder.")
-        return
-    }
-    fun tracks() = shown.map { Track(it.songId, it.title, it.artist, it.thumb, it.uri, it.album, 0, it.image) }
-    fun deleteFile(it: LibItem) {
-        if (!it.songId.startsWith("local_")) {
-            try { ctx.contentResolver.delete(Uri.parse(it.uri), null, null) } catch (e: Exception) { }
-        }
-        if (cur?.source == it.uri) PlayerController.stop()
-    }
-
-    LazyColumn(Modifier.fillMaxSize()) {
-        item {
-            Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = filter, onValueChange = { filter = it }, singleLine = true,
-                    placeholder = { Text(tr("Filter downloads")) }, leadingIcon = { Icon(Icons.Filled.Search, null) },
-                    modifier = Modifier.weight(1f), shape = RoundedCornerShape(24.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        unfocusedBorderColor = Color.Transparent
-                    )
-                )
-                Spacer(Modifier.width(8.dp))
-                FilledTonalButton(onClick = { if (shown.isNotEmpty()) PlayerController.playQueue(tracks(), 0) }) {
-                    Icon(Icons.Filled.PlayArrow, null); Text(tr("Play"))
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.padding(start = 20.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Your Library", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium)
+            IconButton(onClick = { search = !search; if (!search) q = "" }) { Icon(Icons.Filled.Search, "Search library") }
+            Box {
+                IconButton(onClick = { plus = true }) { Icon(Icons.Filled.Add, "Create") }
+                DropdownMenu(expanded = plus, onDismissRequest = { plus = false }) {
+                    DropdownMenuItem(text = { Text(tr("New playlist")) }, leadingIcon = { Icon(Icons.Filled.PlaylistAdd, null) }, onClick = { plus = false; creating = true })
+                    DropdownMenuItem(text = { Text("Import Spotify playlist") }, leadingIcon = { Icon(Icons.Filled.Link, null) }, onClick = { plus = false; host.push(Route.SpotifyImport("")) })
+                    DropdownMenuItem(text = { Text("Import songs from phone") }, leadingIcon = { Icon(Icons.Filled.LibraryMusic, null) }, onClick = { plus = false; host.push(Route.ImportDevice) })
+                    DropdownMenuItem(text = { Text("Restore from Music/SaavnDL") }, leadingIcon = { Icon(Icons.Filled.Restore, null) }, onClick = {
+                        plus = false
+                        host.withAudioPermission { ok ->
+                            if (!ok) host.snack("Allow audio access to scan your Music/SaavnDL folder")
+                            else scope.launch {
+                                val added = LibrarySync.scanSaavnFolder(ctx)
+                                val removed = withContext(Dispatchers.IO) { LibrarySync.removeMissing(ctx) }
+                                host.snack("Added $added songs, removed $removed missing entries")
+                            }
+                        }
+                    })
                 }
-                Row {
-                    IconButton(onClick = { tools = true }) { Icon(Icons.Filled.MoreVert, "Tools") }
-                    DropdownMenu(expanded = tools, onDismissRequest = { tools = false }) {
-                        DropdownMenuItem(text = { Text("Import songs from phone") }, onClick = {
-                            tools = false
-                            host.push(Route.ImportDevice)
-                        })
-                        DropdownMenuItem(text = { Text("Restore from Music/SaavnDL") }, onClick = {
-                            tools = false
-                            host.withAudioPermission { ok ->
-                                if (!ok) host.snack("Allow audio access to scan your Music/SaavnDL folder")
-                                else scope.launch {
-                                    val added = LibrarySync.scanSaavnFolder(ctx)
-                                    val removed = withContext(Dispatchers.IO) { LibrarySync.removeMissing(ctx) }
-                                    host.snack("Added $added songs, removed $removed missing entries")
-                                }
-                            }
-                        })
-                        DropdownMenuItem(text = { Text("Find duplicates") }, onClick = {
-                            tools = false
-                            val g = dupGroups(items)
-                            if (g.isEmpty()) host.snack("No duplicates found") else dupDialog = g
-                        })
-                        DropdownMenuItem(text = { Text("Remove missing entries") }, onClick = {
-                            tools = false
-                            val missing = items.filter { li ->
-                                try {
-                                    ctx.contentResolver.query(Uri.parse(li.uri), arrayOf(MediaStore.MediaColumns._ID), null, null, null)?.use { it.count == 0 } ?: true
-                                } catch (e: Exception) { true }
-                            }
-                            if (missing.isEmpty()) host.snack("Everything is in place") else {
-                                val uris = missing.map { it.uri }.toSet()
-                                Stores.library.update { l -> l.filter { it.uri !in uris } }
-                                host.snack("Removed ${missing.size} missing entries")
-                            }
-                        })
+            }
+        }
+        if (search) OutlinedTextField(
+            value = q, onValueChange = { q = it }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            placeholder = { Text("Find in Your Library") }, leadingIcon = { Icon(Icons.Filled.Search, null) }, shape = RoundedCornerShape(24.dp)
+        )
+        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val names = listOf("Playlists", "Downloaded", "Favorites")
+            items(names.size) { i ->
+                FilterChip(
+                    selected = pill == i, onClick = { pill = if (pill == i) -1 else i }, label = { Text(tr(names[i])) },
+                    shape = RoundedCornerShape(50)
+                )
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box {
+                Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable { sortMenu = true }.padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.SwapVert, null, Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (sort == 0) "Recents" else "Alphabetical", style = MaterialTheme.typography.bodyMedium)
+                }
+                DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                    DropdownMenuItem(text = { Text("Recents") }, onClick = { sort = 0; sortMenu = false })
+                    DropdownMenuItem(text = { Text("Alphabetical") }, onClick = { sort = 1; sortMenu = false })
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = { grid = !grid }) { Icon(if (grid) Icons.Filled.ViewList else Icons.Filled.GridView, "Change layout") }
+        }
+
+        if (entries.isEmpty()) {
+            EmptyState(Icons.Filled.LibraryMusic, tr("Nothing here yet"), "Create a playlist, like songs or download some music.")
+        } else if (grid) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(entries, key = { it.key }) { e ->
+                    Column(Modifier.clip(RoundedCornerShape(12.dp)).clickable { e.onClick() }) {
+                        EntryCover(e, Modifier.fillMaxWidth().aspectRatio(1f), 12.dp)
+                        Spacer(Modifier.height(6.dp))
+                        Text(e.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(e.sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
-        }
-        item {
-            LazyRow(Modifier.padding(bottom = 6.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val names = listOf("Newest", "Name", "Artist", "Size")
-                items(names.size) { i -> FilterChip(selected = sort == i, onClick = { sort = i }, label = { Text(names[i]) }) }
-            }
-        }
-        itemsIndexed(shown, key = { i, li -> "${li.uri}_$i" }) { i, li ->
-            val isCur = cur?.source == li.uri
-            SwipeActionRow(
-                key = li.uri, openKey = openKey, onOpenChange = { openKey = it },
-                actions = buildList {
-                    if (!li.songId.startsWith("local_")) add(SwipeAction(Icons.Filled.Edit, "Edit", Color(0xFF4B5BD6)) { edit = li })
-                    add(SwipeAction(Icons.Filled.Share, "Share", TealDeep) {
-                        val send = Intent(Intent.ACTION_SEND).setType(if (li.format == "MP3") "audio/mpeg" else "audio/mp4")
-                            .putExtra(Intent.EXTRA_STREAM, Uri.parse(li.uri)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        ctx.startActivity(Intent.createChooser(send, "Share song").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    })
-                    add(SwipeAction(Icons.Filled.Delete, "Delete", Color(0xFFD64545)) { delete = li })
-                },
-                modifier = Modifier.padding(horizontal = 8.dp)
-            ) {
-                Row(
-                    Modifier.fillMaxWidth()
-                        .clickable { if (isCur) PlayerController.toggle() else PlayerController.playQueue(tracks(), i) }
-                        .padding(horizontal = 8.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Cover(li.thumb, 54.dp)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(li.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall,
-                            color = if (isCur) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-                        Text(li.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                                Text(li.format, Modifier.padding(horizontal = 6.dp, vertical = 1.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        } else {
+            LazyColumn(Modifier.fillMaxSize()) {
+                items(entries, key = { it.key }) { e ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(RoundedCornerShape(12.dp)).clickable { e.onClick() }.padding(horizontal = 8.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        EntryCover(e, Modifier.size(68.dp), 8.dp)
+                        Spacer(Modifier.width(16.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(e.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (e.kind == 1) Icon(Icons.Filled.PushPin, null, Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
+                                if (e.kind == 2) Icon(Icons.Filled.ArrowCircleDown, null, Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
+                                if (e.kind != 0) Spacer(Modifier.width(5.dp))
+                                Text(e.sub, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            Text(fmtSize(li.bytes), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            if (isCur && playing) Icon(Icons.Filled.GraphicEq, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.height(14.dp))
                         }
                     }
                 }
+                item { Spacer(Modifier.height(24.dp)) }
             }
         }
-        item { Spacer(Modifier.height(24.dp)) }
     }
-
-    delete?.let { item ->
-        AlertDialog(
-            onDismissRequest = { delete = null },
-            title = { Text(if (item.songId.startsWith("local_")) "Remove from library?" else "Delete song?") },
-            text = { Text(if (item.songId.startsWith("local_")) "\"${item.title}\" will be removed from SaavnDL. The file stays on your phone." else "\"${item.title}\" will be removed from your device.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    deleteFile(item)
-                    Stores.library.update { l -> l.filter { it.uri != item.uri } }
-                    host.snack("Deleted")
-                    delete = null
-                }) { Text(tr("Delete"), color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { delete = null }) { Text(tr("Cancel")) } }
-        )
+    if (creating) TextInputDialog(tr("New playlist"), "Name", onDismiss = { creating = false }) { name ->
+        val id = Stores.createPlaylist(name)
+        creating = false
+        host.push(Route.Playlist(id))
     }
-
-    dupDialog?.let { groups ->
-        val extras = groups.flatMap { g -> val keep = g.maxByOrNull { it.bytes }; g.filter { it !== keep } }
-        AlertDialog(
-            onDismissRequest = { dupDialog = null },
-            title = { Text("Duplicates found") },
-            text = { Text("${groups.size} songs exist more than once. Delete ${extras.size} extra copies (${fmtSize(extras.sumOf { it.bytes })}) and keep the largest file of each?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    extras.forEach { deleteFile(it) }
-                    val gone = extras.map { it.uri }.toSet()
-                    Stores.library.update { l -> l.filter { it.uri !in gone } }
-                    host.snack("Deleted ${extras.size} duplicates")
-                    dupDialog = null
-                }) { Text("Delete extras", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { dupDialog = null }) { Text(tr("Cancel")) } }
-        )
-    }
-
-    edit?.let { TagEditorDialog(it) { edit = null } }
-}
-
-@Composable
-private fun TagEditorDialog(item: LibItem, onDismiss: () -> Unit) {
-    val ctx = LocalContext.current
-    val host = LocalHost.current
-    val scope = rememberCoroutineScope()
-    var title by remember { mutableStateOf(item.title) }
-    var artist by remember { mutableStateOf(item.artist) }
-    var album by remember { mutableStateOf(item.album) }
-    var year by remember { mutableStateOf(item.year) }
-    var refresh by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    AlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text(tr("Edit tags")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(title, { title = it }, label = { Text("Title") }, singleLine = true)
-                OutlinedTextField(artist, { artist = it }, label = { Text("Artist") }, singleLine = true)
-                OutlinedTextField(album, { album = it }, label = { Text("Album") }, singleLine = true)
-                OutlinedTextField(year, { year = it }, label = { Text("Year") }, singleLine = true)
-                Row(Modifier.clickable { refresh = !refresh }, verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(refresh, { refresh = it })
-                    Text("Re-download cover art", style = MaterialTheme.typography.bodyMedium)
-                }
-                if (error != null) Text(error ?: "", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = !busy && title.isNotBlank(), onClick = {
-                busy = true; error = null
-                scope.launch {
-                    try {
-                        val upd = TagEditor.edit(ctx, item, title.trim(), artist.trim(), album.trim(), year.trim(), refresh)
-                        Stores.library.update { l -> l.map { if (it.uri == item.uri) upd else it } }
-                        host.snack("Tags updated")
-                        onDismiss()
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        error = e.message ?: "Could not update the file"
-                    } finally {
-                        busy = false
-                    }
-                }
-            }) { Text(if (busy) "Saving…" else tr("Save")) }
-        },
-        dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text(tr("Cancel")) } }
-    )
 }

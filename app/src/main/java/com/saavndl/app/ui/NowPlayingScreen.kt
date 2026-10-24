@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Repeat
@@ -188,6 +189,11 @@ fun NowPlayingScreen(onBack: () -> Unit) {
                 }
                 IconButton(onClick = { addTo = listOf(song) }) { Icon(Icons.Filled.PlaylistAdd, "Add to playlist", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
+            IconButton(onClick = { host.push(Route.PlayQueue) }) { Icon(Icons.Filled.QueueMusic, "Queue", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            IconButton(onClick = { host.push(Route.PlayQueue) }) {
+                Icon(Icons.Filled.QueueMusic, "Queue", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onClick = { host.push(Route.PlayQueue) }) { Icon(Icons.Filled.QueueMusic, "Queue", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             IconButton(onClick = { showLyrics = !showLyrics }) {
                 Icon(Icons.Filled.Notes, tr("Lyrics"), tint = if (showLyrics) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }

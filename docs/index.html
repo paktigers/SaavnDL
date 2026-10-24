@@ -3,30 +3,138 @@
 <title>SaavnDL - app preview</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
+
 :root{--surface-1:#141a21;--border-strong:#2b3643}
 *{box-sizing:border-box}body{margin:0;background:#0b0f14;color:#e6edf3;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 header{text-align:center;padding:36px 16px 8px}h1{margin:0;font-size:28px;font-weight:600}header p{color:#9aa7b4;margin:8px auto 0;max-width:560px;font-size:14px}
 .grid{display:flex;flex-wrap:wrap;gap:28px;justify-content:center;padding:28px 16px 56px}figure{margin:0;text-align:center}figcaption{margin-top:10px;color:#9aa7b4;font-size:14px}
-.ph{--b:#0B0F14;--c:#141B23;--c2:#1A222C;--t:#E6EDF3;--m:#9AA7B4;--p:#2DD4BF;--pc:#0F3D38;width:300px;border:0.5px solid var(--border-strong);border-radius:34px;padding:8px;background:var(--surface-1)}
-.scr{background:var(--b);color:var(--t);border-radius:27px;height:580px;display:flex;flex-direction:column;overflow:hidden;font-size:13px;line-height:1.35;text-align:left}
-.body{flex:1;overflow:hidden;padding:0 12px}.st{display:flex;justify-content:space-between;padding:10px 18px 4px;font-size:11px;color:var(--m)}
-.h{font-size:22px;font-weight:500;margin:6px 4px 0}.sub{font-size:12px;color:var(--m);margin:0 4px 10px}
-.sf{display:flex;align-items:center;gap:8px;background:var(--c2);border-radius:22px;padding:10px 14px;color:var(--m);font-size:13px}
-.chips{display:flex;gap:6px;margin:8px 0;white-space:nowrap;overflow:hidden}.chip{border:0.5px solid #3A4755;border-radius:8px;padding:4px 10px;font-size:12px;color:var(--t);flex:none}.chip.on{background:var(--pc);border-color:var(--p);color:#B2F5EA}
-.row{display:flex;align-items:center;gap:10px;padding:6px 4px}.cv{width:44px;height:44px;border-radius:10px;background:var(--c2);display:flex;align-items:center;justify-content:center;color:#5d6b79;font-size:20px;flex:none}
-.tx{flex:1;min-width:0}.tt{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ts{font-size:11px;color:var(--m)}.ic{color:var(--m);font-size:18px}.pr{color:var(--p)}
-.nav{display:flex;justify-content:space-around;background:var(--c);padding:8px 0 12px;font-size:11px;color:var(--m)}.nav div{text-align:center}.nav i{display:block;font-size:20px}.nav .a{color:var(--p)}
-.bar{height:4px;border-radius:2px;background:#26303B;margin-top:5px;overflow:hidden}.bar span{display:block;height:100%;background:var(--p)}
-.card{background:var(--c);border-radius:16px;padding:10px;margin-bottom:8px;display:flex;gap:10px;align-items:center}
-.cards{display:flex;gap:10px;overflow:hidden;margin-bottom:6px}.cd{width:104px;flex:none}.cd .cv{width:104px;height:104px;border-radius:14px;font-size:30px}.sec{font-size:14px;font-weight:500;margin:8px 4px 6px}
-.opt{display:flex;gap:8px;padding:6px;border-radius:12px;align-items:flex-start}.opt.on{background:rgba(15,61,56,.6)}
-.rd{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--m);margin-top:2px;flex:none}.opt.on .rd{border-color:var(--p);background:radial-gradient(var(--p) 40%,transparent 45%)}
-.tg{width:34px;height:20px;border-radius:10px;background:#3A4755;position:relative;flex:none}.tg.on{background:var(--p)}.tg:after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#0B0F14}.tg.on:after{left:17px}
-.ring{width:26px;height:26px;flex:none}.ly{font-size:15px;color:var(--m);text-align:center;padding:7px 0}.ly.cur{color:var(--p);font-weight:500;font-size:19px}
-.ctl{display:flex;justify-content:space-around;align-items:center;margin:6px 0}.play{width:60px;height:60px;border-radius:50%;background:var(--p);color:#00201C;display:flex;align-items:center;justify-content:center;font-size:30px}
+
+h2.sec{text-align:center;font-size:18px;font-weight:600;margin:28px 16px 0;color:#e6edf3}
+.v1 .ph{--b:#0B0F14;--c:#141B23;--c2:#1A222C;--t:#E6EDF3;--m:#9AA7B4;--p:#2DD4BF;--pc:#0F3D38;width:300px;border:0.5px solid var(--border-strong);border-radius:34px;padding:8px;background:var(--surface-1)}
+.v1 .scr{background:var(--b);color:var(--t);border-radius:27px;height:580px;display:flex;flex-direction:column;overflow:hidden;font-size:13px;line-height:1.35;text-align:left}
+.v1 .body{flex:1;overflow:hidden;padding:0 12px}
+.v1 .st{display:flex;justify-content:space-between;padding:10px 18px 4px;font-size:11px;color:var(--m)}
+.v1 .h{font-size:22px;font-weight:500;margin:6px 4px 0}
+.v1 .sub{font-size:12px;color:var(--m);margin:0 4px 10px}
+.v1 .sf{display:flex;align-items:center;gap:8px;background:var(--c2);border-radius:22px;padding:10px 14px;color:var(--m);font-size:13px}
+.v1 .chips{display:flex;gap:6px;margin:8px 0;white-space:nowrap;overflow:hidden}
+.v1 .chip{border:0.5px solid #3A4755;border-radius:8px;padding:4px 10px;font-size:12px;color:var(--t);flex:none}
+.v1 .chip.on{background:var(--pc);border-color:var(--p);color:#B2F5EA}
+.v1 .row{display:flex;align-items:center;gap:10px;padding:6px 4px}
+.v1 .cv{width:44px;height:44px;border-radius:10px;background:var(--c2);display:flex;align-items:center;justify-content:center;color:#5d6b79;font-size:20px;flex:none}
+.v1 .tx{flex:1;min-width:0}
+.v1 .tt{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v1 .ts{font-size:11px;color:var(--m)}
+.v1 .ic{color:var(--m);font-size:18px}
+.v1 .pr{color:var(--p)}
+.v1 .nav{display:flex;justify-content:space-around;background:var(--c);padding:8px 0 12px;font-size:11px;color:var(--m)}
+.v1 .nav div{text-align:center}
+.v1 .nav i{display:block;font-size:20px}
+.v1 .nav .a{color:var(--p)}
+.v1 .bar{height:4px;border-radius:2px;background:#26303B;margin-top:5px;overflow:hidden}
+.v1 .bar span{display:block;height:100%;background:var(--p)}
+.v1 .card{background:var(--c);border-radius:16px;padding:10px;margin-bottom:8px;display:flex;gap:10px;align-items:center}
+.v1 .cards{display:flex;gap:10px;overflow:hidden;margin-bottom:6px}
+.v1 .cd{width:104px;flex:none}
+.v1 .cd .cv{width:104px;height:104px;border-radius:14px;font-size:30px}
+.v1 .sec{font-size:14px;font-weight:500;margin:8px 4px 6px}
+.v1 .opt{display:flex;gap:8px;padding:6px;border-radius:12px;align-items:flex-start}
+.v1 .opt.on{background:rgba(15,61,56,.6)}
+.v1 .rd{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--m);margin-top:2px;flex:none}
+.v1 .opt.on .rd{border-color:var(--p);background:radial-gradient(var(--p) 40%,transparent 45%)}
+.v1 .tg{width:34px;height:20px;border-radius:10px;background:#3A4755;position:relative;flex:none}
+.v1 .tg.on{background:var(--p)}
+.v1 .tg:after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#0B0F14}
+.v1 .tg.on:after{left:17px}
+.v1 .ring{width:26px;height:26px;flex:none}
+.v1 .ly{font-size:15px;color:var(--m);text-align:center;padding:7px 0}
+.v1 .ly.cur{color:var(--p);font-weight:500;font-size:19px}
+.v1 .ctl{display:flex;justify-content:space-around;align-items:center;margin:6px 0}
+.v1 .play{width:60px;height:60px;border-radius:50%;background:var(--p);color:#00201C;display:flex;align-items:center;justify-content:center;font-size:30px}
+.v2 .ph{--b:#0B0F14;--c:#141B23;--c2:#1A222C;--t:#E6EDF3;--m:#9AA7B4;--p:#2DD4BF;--pc:#0F3D38;width:300px;margin:0 auto;border:0.5px solid var(--border-strong);border-radius:34px;padding:8px;background:var(--surface-1)}
+.v2 .scr{position:relative;background:var(--b);color:var(--t);border-radius:27px;height:590px;display:flex;flex-direction:column;overflow:hidden;font-size:13px;line-height:1.35;text-align:left}
+.v2 .body{flex:1;overflow:hidden;padding:0 10px}
+.v2 .st{display:flex;justify-content:space-between;padding:10px 18px 4px;font-size:11px;color:var(--m)}
+.v2 .h{font-size:22px;font-weight:500}
+.v2 .ic{color:var(--m);font-size:19px}
+.v2 .pr{color:var(--p)}
+.v2 .chips{display:flex;gap:6px;margin:8px 0;white-space:nowrap;overflow:hidden}
+.v2 .chip{border:0.5px solid #3A4755;border-radius:20px;padding:5px 12px;font-size:12px;color:var(--t);flex:none}
+.v2 .chip.on{background:var(--pc);border-color:var(--p);color:#B2F5EA}
+.v2 .row{display:flex;align-items:center;gap:11px;padding:6px 4px}
+.v2 .tx{flex:1;min-width:0}
+.v2 .tt{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v2 .ts{font-size:11.5px;color:var(--m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v2 .cv{width:50px;height:50px;border-radius:9px;background:var(--c2);display:flex;align-items:center;justify-content:center;color:#5d6b79;font-size:20px;flex:none}
+.v2 .mos{width:58px;height:58px;border-radius:8px;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;flex:none}
+.v2 .mos>i{display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-style:normal}
+.v2 .m1{background:#8a4b3c}
+.v2 .m2{background:#5a6f8f}
+.v2 .m3{background:#3f7a6c}
+.v2 .m4{background:#8f7a3e}
+.v2 .m5{background:#7b4a8a}
+.v2 .m6{background:#3a5d8f}
+.v2 .heart{width:58px;height:58px;border-radius:8px;background:linear-gradient(135deg,#4B3AE8,#7FE3C9);display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;flex:none}
+.v2 .dlc{width:58px;height:58px;border-radius:8px;background:linear-gradient(135deg,#0B3B3A,#2DD4BF);display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;flex:none}
+.v2 .nav{display:flex;justify-content:space-around;background:var(--c);padding:8px 0 12px;font-size:11px;color:var(--m)}
+.v2 .nav div{text-align:center}
+.v2 .nav i{display:block;font-size:20px}
+.v2 .nav .a{color:var(--p)}
+.v2 .hero{background:linear-gradient(#1f4a46,var(--b));padding:8px 14px 4px}
+.v2 .back{width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:20px}
+.v2 .big{width:150px;height:150px;border-radius:10px;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;margin:8px auto}
+.v2 .big>i{display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;font-style:normal}
+.v2 .play{width:50px;height:50px;border-radius:50%;background:var(--p);color:#00201C;display:flex;align-items:center;justify-content:center;font-size:26px}
+.v2 .dim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.v2 .sheet{position:absolute;left:0;right:0;bottom:0;background:#1A222C;border-radius:22px 22px 0 0;padding:8px 0 14px}
+.v2 .grab{width:36px;height:4px;border-radius:2px;background:#4a5663;margin:2px auto 8px}
+.v2 .mi{display:flex;align-items:center;gap:14px;padding:9px 18px;font-size:14px}
+.v2 .mi i{font-size:20px;color:var(--m);width:22px;text-align:center}
+.v2 .mi.red,.v2 .mi.red i{color:#FF6B6B}
+.v2 .mi .go{margin-left:auto;font-size:16px}
+.v2 .cb{width:20px;height:20px;border-radius:5px;border:2px solid var(--m);flex:none;display:flex;align-items:center;justify-content:center;font-size:14px;color:#00201C}
+.v2 .cb.on{background:var(--p);border-color:var(--p)}
+.v2 .sel{background:rgba(15,61,56,.6);border-radius:12px}
+.v2 .selbar{background:var(--pc);display:flex;align-items:center;gap:12px;padding:8px 10px;margin-bottom:6px}
+.v2 .bd{background:var(--pc);color:#B2F5EA;border-radius:5px;padding:0 6px;font-size:10.5px}
 </style></head><body>
 <header><h1>SaavnDL</h1><p>Design preview of the Android app. These are mock screens (sample data), not real screenshots.</p></header>
-<div class="grid">
+<h2 class="sec">Library, playlists, queue and menus</h2>
+<div class="grid v2">
+<figure><div class="ph"><div class="scr"><div class="st"><span>9:41</span><span>5G 87%</span></div><div class="body"><div style="display:flex;align-items:center;padding:6px 6px 0"><span class="h" style="flex:1">Your Library</span><i class="ti ti-search" style="font-size:22px;margin-right:14px"></i><i class="ti ti-plus" style="font-size:24px"></i></div>
+<div class="chips"><span class="chip">Playlists</span><span class="chip">Downloaded</span><span class="chip">Favorites</span></div>
+<div style="display:flex;align-items:center;padding:2px 6px 8px"><i class="ti ti-arrows-sort" style="font-size:18px"></i><span style="margin-left:8px;font-size:13px;flex:1">Recents</span><i class="ti ti-layout-grid" style="font-size:20px"></i></div>
+<div class="row"><div class="heart"><i class="ti ti-heart-filled"></i></div><div class="tx"><div class="tt" style="font-size:15px">Liked Songs</div><div class="ts"><i class="ti ti-pin pr"></i> Playlist • 48 songs</div></div></div>
+<div class="row"><div class="dlc"><i class="ti ti-circle-arrow-down"></i></div><div class="tx"><div class="tt" style="font-size:15px">Downloaded</div><div class="ts"><i class="ti ti-circle-arrow-down pr"></i> 126 songs • 812 MB</div></div></div>
+<div class="row"><div class="mos"><i class="m1"><i class="ti ti-music"></i></i><i class="m2"><i class="ti ti-music"></i></i><i class="m3"><i class="ti ti-music"></i></i><i class="m4"><i class="ti ti-music"></i></i></div><div class="tx"><div class="tt" style="font-size:15px">Long Drive</div><div class="ts">Playlist • 34 songs</div></div></div>
+<div class="row"><div class="mos"><i class="m5"><i class="ti ti-music"></i></i><i class="m6"><i class="ti ti-music"></i></i><i class="m1"><i class="ti ti-music"></i></i><i class="m3"><i class="ti ti-music"></i></i></div><div class="tx"><div class="tt" style="font-size:15px">Old Classics</div><div class="ts">Playlist • 61 songs</div></div></div>
+<div class="row"><div class="mos"><i class="m4"><i class="ti ti-music"></i></i><i class="m2"><i class="ti ti-music"></i></i><i class="m6"><i class="ti ti-music"></i></i><i class="m5"><i class="ti ti-music"></i></i></div><div class="tx"><div class="tt" style="font-size:15px">Road Trip Mix</div><div class="ts">Playlist • 22 songs</div></div></div></div>
+<div class="nav"><div class=""><i class="ti ti-search"></i>Discover</div><div class="a"><i class="ti ti-music"></i>Library</div><div class=""><i class="ti ti-cloud-download"></i>Downloads</div><div class=""><i class="ti ti-settings"></i>Settings</div></div></div></div><figcaption>Library</figcaption></figure>
+<figure><div class="ph"><div class="scr"><div class="st"><span>9:41</span><span>5G 87%</span></div><div class="body" style="padding:0"><div class="hero"><div class="back"><i class="ti ti-arrow-left"></i></div><div class="big"><i class="m1"><i class="ti ti-music"></i></i><i class="m2"><i class="ti ti-music"></i></i><i class="m3"><i class="ti ti-music"></i></i><i class="m4"><i class="ti ti-music"></i></i></div>
+<div class="h" style="margin-top:6px">Long Drive</div>
+<div style="display:flex;align-items:center;gap:7px;margin:4px 0"><span style="width:22px;height:22px;border-radius:50%;background:var(--pc);display:flex;align-items:center;justify-content:center;font-size:13px"><i class="ti ti-user"></i></span><b style="font-size:13px">You</b></div>
+<div class="ts">34 songs • 2h 18m</div>
+<div style="display:flex;align-items:center;gap:16px;margin:10px 0 6px"><i class="ti ti-circle-arrow-down pr" style="font-size:28px"></i><i class="ti ti-share ic"></i><i class="ti ti-dots ic"></i><span style="flex:1"></span><i class="ti ti-arrows-shuffle ic" style="font-size:22px"></i><div class="play"><i class="ti ti-player-play-filled"></i></div></div>
+<div class="chips" style="margin:2px 0 0"><span class="chip"><i class="ti ti-pencil"></i> Edit</span><span class="chip"><i class="ti ti-arrows-sort"></i> Sort</span></div></div>
+<div style="padding:4px 10px"><div class="row"><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt pr">Zihaal e Miskin</div><div class="ts"><i class="ti ti-circle-check-filled pr"></i> Javed-Mohsin, Vishal Mishra</div></div><i class="ti ti-dots-vertical ic"></i></div><div class="row"><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt ">Pal</div><div class="ts"><i class="ti ti-circle-check-filled pr"></i> Javed-Mohsin, Arijit Singh</div></div><i class="ti ti-dots-vertical ic"></i></div><div class="row"><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt ">Khairiyat</div><div class="ts">Pritam, Arijit Singh</div></div><i class="ti ti-dots-vertical ic"></i></div></div></div></div></div><figcaption>Playlist page</figcaption></figure>
+<figure><div class="ph"><div class="scr"><div class="st"><span>9:41</span><span>5G 87%</span></div><div class="body" style="padding:0"><div class="hero" style="height:300px"><div class="back"><i class="ti ti-arrow-left"></i></div><div class="h" style="margin-top:150px">Long Drive</div></div></div><div class="dim"></div>
+<div class="sheet"><div class="grab"></div><div class="row" style="padding:2px 18px 8px"><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt" style="font-size:15px">Zihaal e Miskin</div><div class="ts">Javed-Mohsin</div></div></div><div style="border-top:0.5px solid #2B3642"></div>
+<div class="mi"><i class="ti ti-share"></i>Share</div><div class="mi"><i class="ti ti-playlist-add"></i>Add to playlist</div><div class="mi red"><i class="ti ti-circle-minus"></i>Remove from this playlist</div><div class="mi"><i class="ti ti-heart"></i>Add to Liked Songs</div><div class="mi"><i class="ti ti-download"></i>Download</div><div class="mi"><i class="ti ti-playlist"></i>Add to queue</div><div class="mi"><i class="ti ti-player-track-next"></i>Play next</div><div class="mi"><i class="ti ti-list"></i>Go to Queue</div><div class="mi"><i class="ti ti-stack-2"></i>Similar songs</div><div class="mi"><i class="ti ti-disc"></i>Go to album</div><div class="mi"><i class="ti ti-user"></i>Go to artists<i class="ti ti-chevron-right go"></i></div></div></div></div><figcaption>3-dot song menu</figcaption></figure>
+<figure><div class="ph"><div class="scr"><div class="st"><span>9:41</span><span>5G 87%</span></div><div class="body"><div style="display:flex;align-items:center;gap:8px;padding:4px 0"><i class="ti ti-arrow-left"></i><span style="font-size:19px;font-weight:500">Queue</span></div>
+<div class="ts" style="padding:8px 6px 2px">Now playing</div>
+<div class="row"><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt pr">Zihaal e Miskin</div><div class="ts">Javed-Mohsin, Vishal Mishra</div></div><i class="ti ti-player-pause-filled pr" style="font-size:22px"></i></div>
+<div style="display:flex;align-items:center;padding:12px 6px 2px"><span class="ts" style="flex:1">Next in queue</span><span class="pr" style="font-size:12px">Clear queue</span></div>
+<div class="row"><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt">Pal</div><div class="ts">Javed-Mohsin, Arijit Singh</div></div><i class="ti ti-x ic"></i><i class="ti ti-menu-2 ic"></i></div><div class="row" style="background:#1A222C;border-radius:14px;transform:scale(1.03);box-shadow:0 4px 14px rgba(0,0,0,.5)"><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt">Khairiyat</div><div class="ts">Pritam, Arijit Singh</div></div><i class="ti ti-x ic"></i><i class="ti ti-menu-2 pr"></i></div><div class="row"><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt">Soch Na Sake</div><div class="ts">Amaal Mallik, Arijit Singh</div></div><i class="ti ti-x ic"></i><i class="ti ti-menu-2 ic"></i></div><div class="row"><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt">Awara</div><div class="ts">Salman Ali, Muskaan</div></div><i class="ti ti-x ic"></i><i class="ti ti-menu-2 ic"></i></div>
+<div class="ts" style="padding:10px 6px">Drag the handle to change what plays next, tap a song to jump to it.</div></div><div class="nav"><div class=""><i class="ti ti-search"></i>Discover</div><div class="a"><i class="ti ti-music"></i>Library</div><div class=""><i class="ti ti-cloud-download"></i>Downloads</div><div class=""><i class="ti ti-settings"></i>Settings</div></div></div></div><figcaption>Play queue (drag to order)</figcaption></figure>
+<figure><div class="ph"><div class="scr"><div class="st"><span>9:41</span><span>5G 87%</span></div><div class="selbar"><i class="ti ti-x" style="font-size:22px"></i><b style="flex:1;font-size:14px">3 selected</b><i class="ti ti-select-all" style="font-size:22px"></i><i class="ti ti-trash" style="font-size:22px;color:#FF6B6B"></i></div>
+<div class="body"><div class="row sel"><span class="cb on"><i class="ti ti-check"></i></span><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt">Midnight Drive</div><div class="ts">Nova Lane</div><span class="bd">MP3</span> <span class="ts">7.4 MB</span></div></div><div class="row"><span class="cb"></span><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt">Slow Monsoon</div><div class="ts">Aria Vale</div><span class="bd">M4A</span> <span class="ts">9.1 MB</span></div></div><div class="row sel"><span class="cb on"><i class="ti ti-check"></i></span><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt">Golden Hour</div><div class="ts">The Lowlands</div><span class="bd">MP3</span> <span class="ts">6.8 MB</span></div></div><div class="row"><span class="cb"></span><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt">Neon Skyline</div><div class="ts">Kiran Rao</div><span class="bd">MP3</span> <span class="ts">8.2 MB</span></div></div><div class="row sel"><span class="cb on"><i class="ti ti-check"></i></span><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt">Paper Boats</div><div class="ts">Aria Vale</div><span class="bd">M4A</span> <span class="ts">10.3 MB</span></div></div><div class="row"><span class="cb"></span><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt">Slow Lines</div><div class="ts">Kiran Rao</div><span class="bd">MP3</span> <span class="ts">7.9 MB</span></div></div></div><div class="nav"><div class=""><i class="ti ti-search"></i>Discover</div><div class="a"><i class="ti ti-music"></i>Library</div><div class=""><i class="ti ti-cloud-download"></i>Downloads</div><div class=""><i class="ti ti-settings"></i>Settings</div></div></div></div><figcaption>Long-press: select and delete</figcaption></figure>
+<figure><div class="ph"><div class="scr"><div class="st"><span>9:41</span><span>5G 87%</span></div><div class="body"><div style="display:flex;align-items:center;gap:8px;padding:4px 0"><i class="ti ti-arrow-left"></i><span style="font-size:19px;font-weight:500;flex:1">Downloaded</span><i class="ti ti-dots-vertical ic"></i></div>
+<div class="row"><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt ">Midnight Drive</div><div class="ts">Nova Lane</div></div><i class="ti ti-dots-vertical ic"></i></div><div class="row"><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt ">Slow Monsoon</div><div class="ts">Aria Vale</div></div><i class="ti ti-dots-vertical ic"></i></div></div><div class="dim"></div>
+<div class="sheet"><div class="grab"></div><div class="row" style="padding:2px 18px 8px"><div class="cv"><i class="ti ti-music"></i></div><div class="tx"><div class="tt" style="font-size:15px">Midnight Drive</div><div class="ts">Nova Lane</div></div></div><div style="border-top:0.5px solid #2B3642"></div>
+<div class="mi"><i class="ti ti-player-track-next"></i>Play next</div><div class="mi"><i class="ti ti-playlist"></i>Add to queue</div><div class="mi"><i class="ti ti-list"></i>Go to Queue</div><div class="mi"><i class="ti ti-pencil"></i>Edit tags</div><div class="mi"><i class="ti ti-share"></i>Share</div><div class="mi red"><i class="ti ti-trash"></i>Delete from device</div></div></div></div><figcaption>Downloaded song menu</figcaption></figure>
+</div>
+<h2 class="sec">Discover, player, downloads and settings</h2>
+<div class="grid v1">
 
 <figure><div class="ph"><div class="scr"><div class="st"><span>9:41</span><span>5G 87%</span></div><div class="body"><div class="h">Discover</div><div class="sub">Search, preview and download — with full tags</div>
 <div class="sf"><i class="ti ti-search"></i>Songs, albums, artists or paste a link</div>
@@ -92,4 +200,5 @@ header{text-align:center;padding:36px 16px 8px}h1{margin:0;font-size:28px;font-w
 <div class="card" style="display:block"><div style="font-weight:500;margin-bottom:6px">API server</div><div class="sf" style="font-size:11px;color:var(--t)">https://jiosaavn-api.tigerspak2.workers.dev</div></div>
 <div class="card" style="display:block"><div style="font-weight:500;margin-bottom:6px">Updates</div><div class="sf" style="font-size:12px;color:var(--t)">paktigers/SaavnDL</div></div></div>
 <div class="nav"><div><i class="ti ti-search"></i>Discover</div><div><i class="ti ti-music"></i>Library</div><div><i class="ti ti-cloud-download"></i>Downloads</div><div class="a"><i class="ti ti-settings"></i>Settings</div></div></div></div><figcaption>Settings</figcaption></figure>
-</div></body></html>
+</div>
+</body></html>

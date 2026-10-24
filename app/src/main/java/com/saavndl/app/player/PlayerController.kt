@@ -54,6 +54,8 @@ object PlayerController {
     private val _sleepEnd = MutableStateFlow<Long?>(null)
     private val _sleepAfterTrack = MutableStateFlow(false)
     private val _queueSize = MutableStateFlow(0)
+    private val _queueList = MutableStateFlow<List<Track>>(emptyList())
+    private val _queueIndex = MutableStateFlow(0)
     val current: StateFlow<Track?> = _current
     val playing: StateFlow<Boolean> = _playing
     val loading: StateFlow<Boolean> = _loading
@@ -64,6 +66,14 @@ object PlayerController {
     val sleepEnd: StateFlow<Long?> = _sleepEnd
     val sleepAfterTrack: StateFlow<Boolean> = _sleepAfterTrack
     val queueSize: StateFlow<Int> = _queueSize
+    val queueList: StateFlow<List<Track>> = _queueList
+    val queueIndex: StateFlow<Int> = _queueIndex
+
+    private fun publish() {
+        _queueList.value = queue
+        _queueIndex.value = index
+        _queueSize.value = queue.size
+    }
 
     private val attrs = AudioAttributes.Builder()
         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build()
@@ -115,7 +125,7 @@ object PlayerController {
         if (queue.isEmpty()) { playOne(t); return }
         queue = queue.toMutableList().also { it.add(index + 1, t) }
         original = original + t
-        _queueSize.value = queue.size
+        publish()
     }
 
     fun addToQueue(t: Track) {
@@ -123,7 +133,7 @@ object PlayerController {
         if (queue.isEmpty()) { playOne(t); return }
         queue = queue + t
         original = original + t
-        _queueSize.value = queue.size
+        publish()
     }
 
     fun toggleShuffle() {
@@ -137,6 +147,44 @@ object PlayerController {
             queue = original
             index = original.indexOf(cur).coerceAtLeast(0)
         }
+        publish()
+    }
+
+    /** Replaces the songs that come after the current one (used by the queue screen to re-order / remove). */
+    fun setUpNext(order: List<Track>) {
+        if (queue.isEmpty()) return
+        queue = queue.take(index + 1) + order
+        original = queue
+        publish()
+    }
+
+    fun removeUpNext(position: Int) {
+        val abs = index + 1 + position
+        if (abs !in queue.indices) return
+        queue = queue.toMutableList().also { it.removeAt(abs) }
+        original = queue
+        publish()
+    }
+
+    fun clearUpNext() {
+        if (queue.isEmpty()) return
+        queue = queue.take(index + 1)
+        original = queue
+        publish()
+    }
+
+    /** Jumps to an absolute position of the queue. */
+    fun playAt(position: Int) {
+        if (position !in queue.indices) return
+        index = position
+        startTrack(queue[position])
+    }
+
+    fun playShuffled(tracks: List<Track>) {
+        val list = tracks.filter { it.source.isNotBlank() }
+        if (list.isEmpty()) return
+        _shuffle.value = true
+        playQueue(list, kotlin.random.Random.nextInt(list.size))
     }
 
     fun cycleRepeat() { _repeat.value = (_repeat.value + 1) % 3 }
@@ -159,6 +207,7 @@ object PlayerController {
     private fun startTrack(t: Track) {
         release()
         _current.value = t
+        publish()
         _loading.value = true
         _playing.value = false
         _position.value = 0
@@ -235,7 +284,7 @@ object PlayerController {
         release()
         abandonFocus()
         queue = emptyList(); original = emptyList(); index = 0
-        _queueSize.value = 0
+        publish()
         _current.value = null
         _playing.value = false
         _loading.value = false

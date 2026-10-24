@@ -1,9 +1,17 @@
 package com.saavndl.app.data
 
 import android.text.Html
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
+
+/** App-wide scope for short navigation look-ups that must outlive a dialog. */
+val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+data class ArtistRef(val id: String, val name: String)
 
 enum class Kind(val label: String) {
     SONGS("Songs"), ALBUMS("Albums"), PLAYLISTS("Playlists"), ARTISTS("Artists")
@@ -26,7 +34,9 @@ data class Song(
     val url: String,
     val image: String,
     val thumb: String,
-    val downloads: List<DlUrl>
+    val downloads: List<DlUrl>,
+    val albumId: String = "",
+    val artistRefs: List<ArtistRef> = emptyList()
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name); put("artists", artists); put("firstArtist", firstArtist)
@@ -36,6 +46,8 @@ data class Song(
         val a = JSONArray()
         downloads.forEach { a.put(JSONObject().put("q", it.quality).put("u", it.url)) }
         put("downloads", a)
+        put("albumId", albumId)
+        put("artistRefs", JSONArray().also { r -> artistRefs.forEach { r.put(JSONObject().put("id", it.id).put("name", it.name)) } })
     }
 
     companion object {
@@ -52,7 +64,11 @@ data class Song(
                 language = o.optString("language"), label = o.optString("label"),
                 copyright = o.optString("copyright"), playCount = o.optLong("playCount"),
                 url = o.optString("url"), image = o.optString("image"), thumb = o.optString("thumb"),
-                downloads = dl
+                downloads = dl,
+                albumId = o.optString("albumId"),
+                artistRefs = o.optJSONArray("artistRefs")?.let { r ->
+                    (0 until r.length()).map { ArtistRef(r.getJSONObject(it).optString("id"), r.getJSONObject(it).optString("name")) }
+                } ?: emptyList()
             )
         }
     }
@@ -100,7 +116,13 @@ fun JSONArray?.toSongs(): List<Song> {
 }
 
 fun songFromApi(o: JSONObject): Song {
-    val names = o.optJSONObject("artists")?.optJSONArray("primary").names()
+    val primArr = o.optJSONObject("artists")?.optJSONArray("primary")
+    val names = primArr.names()
+    val refs = ArrayList<ArtistRef>()
+    if (primArr != null) for (i in 0 until primArr.length()) {
+        val x = primArr.optJSONObject(i) ?: continue
+        if (x.str("id").isNotBlank()) refs.add(ArtistRef(x.str("id"), x.str("name").dec()))
+    }
     val (thumb, big) = o.optJSONArray("image").images()
     val dlArr = o.optJSONArray("downloadUrl")
     val dl = ArrayList<DlUrl>()
@@ -124,7 +146,9 @@ fun songFromApi(o: JSONObject): Song {
         url = o.str("url"),
         image = big,
         thumb = thumb.ifBlank { big },
-        downloads = dl
+        downloads = dl,
+        albumId = o.optJSONObject("album")?.str("id").orEmpty(),
+        artistRefs = refs
     )
 }
 
