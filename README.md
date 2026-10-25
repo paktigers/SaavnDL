@@ -1,4 +1,13 @@
 [Live design preview](https://paktigers.github.io/SaavnDL/)
+<img width="1629" height="716" alt="menu" src="https://github.com/user-attachments/assets/e00b5d55-c9c4-4d33-8e2a-0fc4137c4180" />
+<img width="361" height="676" alt="image" src="https://github.com/user-attachments/assets/b1c9328b-30f3-45b6-97ed-28893a162f20" />
+
+<img width="1638" height="706" alt="image" src="https://github.com/user-attachments/assets/3c21b007-51d2-48e2-9a34-c96df23de58a" />
+<img width="377" height="662" alt="image" src="https://github.com/user-attachments/assets/dfab7ef5-ca19-4a5e-8b58-22bc6b3b1787" />
+
+
+
+
 # SaavnDL (Android)
 
 Jetpack Compose app on top of the open-source `jiosaavn-api` (default server: https://saavn.sumit.co).
