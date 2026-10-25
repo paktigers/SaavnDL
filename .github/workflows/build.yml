@@ -21,6 +21,13 @@ jobs:
       VERSION: 1.0.${{ github.run_number }}
     steps:
       - uses: actions/checkout@v5
+
+      # Uploading a zip to GitHub never deletes old files. Remove the ones that were replaced in newer versions of the project,
+      # otherwise the build fails with "Conflicting overloads".
+      - name: Remove obsolete files
+        run: |
+          rm -f app/src/main/java/com/saavndl/app/ui/PlaylistScreens.kt \
+                app/src/main/java/com/saavndl/app/ui/SwipeRow.kt
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
