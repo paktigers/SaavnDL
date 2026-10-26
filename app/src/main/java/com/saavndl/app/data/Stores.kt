@@ -154,16 +154,16 @@ data class LibItem(
     }
 }
 
-data class UserPlaylist(val id: String, val name: String, val songs: List<Song>) {
+data class UserPlaylist(val id: String, val name: String, val songs: List<Song>, val autoDownload: Boolean = false) {
     fun toJson(): JSONObject = JSONObject().apply {
-        put("id", id); put("name", name)
+        put("id", id); put("name", name); put("autoDownload", autoDownload)
         val a = JSONArray(); songs.forEach { a.put(it.toJson()) }; put("songs", a)
     }
 
     companion object {
         fun fromJson(o: JSONObject): UserPlaylist {
             val a = o.optJSONArray("songs") ?: JSONArray()
-            return UserPlaylist(o.optString("id"), o.optString("name"), (0 until a.length()).map { Song.fromJson(a.getJSONObject(it)) })
+            return UserPlaylist(o.optString("id"), o.optString("name"), (0 until a.length()).map { Song.fromJson(a.getJSONObject(it)) }, o.optBoolean("autoDownload", false))
         }
     }
 }
@@ -221,12 +221,33 @@ object Stores {
         return id
     }
 
-    fun addToPlaylist(id: String, songs: List<Song>) = playlists.update { l ->
-        l.map { p ->
-            if (p.id != id) p else p.copy(songs = p.songs + songs.filter { s -> p.songs.none { it.id == s.id } })
+    /** Adds songs to a playlist. Songs that are already in it are skipped. If the playlist is a "downloaded" playlist
+     *  (download button was used, or every song is already downloaded) the new songs are downloaded automatically. */
+    fun addToPlaylist(id: String, songs: List<Song>): AddOutcome {
+        val pl = playlists.items.value.firstOrNull { it.id == id } ?: return AddOutcome(0, 0, false)
+        val unique = songs.distinctBy { it.id }
+        val have = pl.songs.map { it.id }.toSet()
+        val fresh = unique.filter { it.id !in have }
+        val skipped = unique.size - fresh.size
+        if (fresh.isNotEmpty()) playlists.update { l -> l.map { if (it.id == id) it.copy(songs = it.songs + fresh) else it } }
+        val libIds = library.items.value.map { it.songId }.toSet()
+        val allDownloaded = pl.songs.isNotEmpty() && pl.songs.all { it.id in libIds }
+        val auto = fresh.isNotEmpty() && (pl.autoDownload || allDownloaded)
+        if (auto) {
+            val todo = fresh.filter { it.id !in libIds }
+            if (todo.isNotEmpty()) {
+                val positions = todo.map { s -> pl.songs.size + fresh.indexOfFirst { it.id == s.id } + 1 }
+                Downloads.enqueue(SaavnApp.instance, todo, FileNames.clean(pl.name), positions, pl.songs.size + fresh.size)
+            }
         }
+        return AddOutcome(fresh.size, skipped, auto)
     }
+
+    fun setPlaylistAutoDownload(id: String, value: Boolean) =
+        playlists.update { l -> l.map { if (it.id == id) it.copy(autoDownload = value) else it } }
 }
+
+data class AddOutcome(val added: Int, val skipped: Int, val autoDownload: Boolean)
 
 /** JSON backup of settings, favorites, playlists and recent searches. */
 object Backup {

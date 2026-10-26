@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.CheckCircle
@@ -193,6 +194,32 @@ fun ErrorState(message: String, onRetry: () -> Unit) {
     }
 }
 
+// ------------------------------------------------------------------ download status (Spotify style)
+@Composable
+fun DownloadedBadge(size: Dp) {
+    Box(Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
+        Icon(Icons.Filled.ArrowDownward, "Downloaded", Modifier.size(size * 0.65f), tint = MaterialTheme.colorScheme.onPrimary)
+    }
+}
+
+/** progress ring while downloading, filled green arrow when downloaded, retry when failed. */
+@Composable
+fun DownloadStatusIcon(dl: DlTask?, inLibrary: Boolean, idle: Boolean = true) {
+    val d = dl
+    val busy = d != null && d.active
+    when {
+        busy -> Box(contentAlignment = Alignment.Center) {
+            if (d != null && d.status == DlStatus.DOWNLOADING && d.progress > 0f)
+                CircularProgressIndicator(progress = { d.progress }, modifier = Modifier.size(26.dp), strokeWidth = 2.5.dp)
+            else CircularProgressIndicator(modifier = Modifier.size(26.dp), strokeWidth = 2.5.dp)
+            Icon(Icons.Filled.Close, "Cancel", Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        d != null && d.status == DlStatus.FAILED -> Icon(Icons.Filled.Refresh, "Retry", tint = MaterialTheme.colorScheme.error)
+        inLibrary || (d != null && (d.status == DlStatus.DONE || d.status == DlStatus.SKIPPED)) -> DownloadedBadge(24.dp)
+        idle -> Icon(Icons.Filled.Download, "Download", tint = MaterialTheme.colorScheme.primary)
+    }
+}
+
 // ------------------------------------------------------------------ song row
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -236,20 +263,7 @@ fun SongRow(
         if (!selecting) {
             val d = dl
             val busy = d != null && d.active
-            IconButton(onClick = { if (busy) onCancelDl() else onDownload() }) {
-                when {
-                    busy -> Box(contentAlignment = Alignment.Center) {
-                        if (d != null && d.status == DlStatus.DOWNLOADING && d.progress > 0f)
-                            CircularProgressIndicator(progress = { d.progress }, modifier = Modifier.size(26.dp), strokeWidth = 2.5.dp)
-                        else CircularProgressIndicator(modifier = Modifier.size(26.dp), strokeWidth = 2.5.dp)
-                        Icon(Icons.Filled.Close, "Cancel", Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    d != null && d.status == DlStatus.FAILED -> Icon(Icons.Filled.Refresh, "Retry", tint = MaterialTheme.colorScheme.error)
-                    inLibrary || (d != null && (d.status == DlStatus.DONE || d.status == DlStatus.SKIPPED)) ->
-                        Icon(Icons.Filled.CheckCircle, "Downloaded", tint = MaterialTheme.colorScheme.primary)
-                    else -> Icon(Icons.Filled.Download, "Download", tint = MaterialTheme.colorScheme.primary)
-                }
-            }
+            IconButton(onClick = { if (busy) onCancelDl() else onDownload() }) { DownloadStatusIcon(d, inLibrary) }
             IconButton(onClick = onFav) {
                 Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "Favorite",
                     tint = if (fav) Color(0xFFFF5C8A) else MaterialTheme.colorScheme.onSurfaceVariant)

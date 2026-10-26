@@ -3,6 +3,7 @@ package com.saavndl.app.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -29,10 +30,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.saavndl.app.data.FileNames
+import com.saavndl.app.data.SettingsStore
 import com.saavndl.app.data.Song
 import com.saavndl.app.data.Stores
 import com.saavndl.app.data.fmtDur
 import com.saavndl.app.data.tr
+import com.saavndl.app.download.DlStatus
 import com.saavndl.app.download.Downloads
 import com.saavndl.app.player.PlayerController
 import com.saavndl.app.player.toTrack
@@ -86,12 +89,30 @@ fun DownloadCover(modifier: Modifier = Modifier, radius: Dp = 10.dp, iconSize: D
     ) { Icon(Icons.Filled.ArrowCircleDown, null, tint = Color.White, modifier = Modifier.size(iconSize)) }
 }
 
+/** Spotify-style download button: outline = not downloaded, ring = downloading, filled green = everything downloaded. */
+@Composable
+fun DownloadStateButton(state: Int, progress: Float, onClick: () -> Unit) {
+    Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        when (state) {
+            2 -> DownloadedBadge(30.dp)
+            1 -> {
+                CircularProgressIndicator(progress = { progress.coerceIn(0.04f, 1f) }, modifier = Modifier.size(30.dp), strokeWidth = 2.5.dp)
+                Icon(Icons.Filled.Stop, "Cancel download", Modifier.size(11.dp), tint = MaterialTheme.colorScheme.primary)
+            }
+            else -> Box(Modifier.size(30.dp).border(2.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.ArrowDownward, "Download all", Modifier.size(17.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
 // ------------------------------------------------------------------ hero (like a Spotify playlist page)
 @Composable
 fun CollectionHero(
     title: String, meta: String, covers: List<String>, heart: Boolean,
     onBack: () -> Unit, onDownload: () -> Unit, onShare: () -> Unit, onMore: () -> Unit,
     onShuffle: () -> Unit, onPlay: () -> Unit,
+    downloadState: Int = 0, downloadProgress: Float = 0f,
     chips: @Composable () -> Unit = {}
 ) {
     Column(
@@ -115,7 +136,7 @@ fun CollectionHero(
         }
         Text(meta, Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onDownload) { Icon(Icons.Filled.ArrowCircleDown, "Download all", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp)) }
+            DownloadStateButton(downloadState, downloadProgress, onDownload)
             IconButton(onClick = onShare) { Icon(Icons.Filled.Share, "Share") }
             IconButton(onClick = onMore) { Icon(Icons.Filled.MoreVert, "More") }
             Spacer(Modifier.weight(1f))
@@ -157,10 +178,38 @@ fun PlaylistScreen(id: String, onBack: () -> Unit) {
     fun toggle(sid: String) { if (!sel.remove(sid)) sel.add(sid) }
     val sub = FileNames.clean(p.name)
 
+    // download state of the whole playlist (like Spotify: outline -> ring -> filled)
+    val tasks by Downloads.tasks.collectAsState()
+    val lib by Stores.library.items.collectAsState()
+    val libIds = remember(lib) { lib.map { it.songId }.toSet() }
+    val taskBy = remember(tasks) { tasks.groupBy { it.song.id }.mapValues { it.value.last() } }
+    val dlDone = songs.count { it.id in libIds }
+    val dlActive = songs.mapNotNull { taskBy[it.id] }.filter { it.active }
+    val dlState = when {
+        songs.isNotEmpty() && dlDone == songs.size -> 2
+        dlActive.isNotEmpty() -> 1
+        else -> 0
+    }
+    val dlProgress = if (songs.isEmpty()) 0f else (dlDone + dlActive.fold(0f) { a, t -> a + t.progress }) / songs.size
+
     fun downloadAll() {
-        if (songs.isEmpty()) return
-        Downloads.enqueue(ctx, songs, sub, songs.indices.map { it + 1 }, songs.size)
-        host.snack("Added ${songs.size} songs to queue")
+        val todo = songs.filter { it.id !in libIds && taskBy[it.id]?.active != true }
+        if (todo.isEmpty()) { host.snack("All songs are already downloaded"); return }
+        Stores.setPlaylistAutoDownload(id, true)   // songs added later are downloaded automatically
+        val positions = todo.map { s -> songs.indexOfFirst { it.id == s.id } + 1 }
+        Downloads.enqueue(ctx, todo, sub, positions, songs.size)
+        host.snack("Downloading ${todo.size} songs")
+    }
+    fun onDownloadClick() {
+        when (dlState) {
+            2 -> host.snack("All songs in this playlist are downloaded")
+            1 -> {
+                dlActive.forEach { Downloads.cancel(it.id) }
+                Stores.setPlaylistAutoDownload(id, false)
+                host.snack("Download cancelled")
+            }
+            else -> downloadAll()
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -183,7 +232,8 @@ fun PlaylistScreen(id: String, onBack: () -> Unit) {
                     title = p.name,
                     meta = "${songs.size} songs" + if (songs.isNotEmpty()) " • ${fmtTotal(songs.sumOf { it.duration })}" else "",
                     covers = songs.take(4).map { it.thumb }, heart = false,
-                    onBack = onBack, onDownload = { downloadAll() },
+                    onBack = onBack, onDownload = { onDownloadClick() },
+                    downloadState = dlState, downloadProgress = dlProgress,
                     onShare = { shareText(ctx, p.name + "\n" + songs.take(60).joinToString("\n") { "${it.name} - ${it.artists}" }) },
                     onMore = { more = true },
                     onShuffle = { if (songs.isNotEmpty()) PlayerController.playShuffled(songs.map { it.toTrack() }) },
@@ -257,6 +307,14 @@ fun PlaylistScreen(id: String, onBack: () -> Unit) {
                             Icon(Icons.Filled.DragHandle, "Drag to reorder", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else if (sel.isEmpty()) {
+                        val t = taskBy[s.id]
+                        val inLib = s.id in libIds
+                        if (inLib || (t != null && (t.active || t.status == DlStatus.FAILED))) {
+                            IconButton(onClick = {
+                                if (t != null && t.active) Downloads.cancel(t.id)
+                                else if (t != null && t.status == DlStatus.FAILED) Downloads.retry(ctx, t.id)
+                            }) { DownloadStatusIcon(t, inLib, idle = false) }
+                        }
                         IconButton(onClick = { menuSong = s }) { Icon(Icons.Filled.MoreVert, "More", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                 }
@@ -303,10 +361,35 @@ fun FavoritesScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     val host = LocalHost.current
     var more by remember { mutableStateOf(false) }
+    val tasks by Downloads.tasks.collectAsState()
+    val lib by Stores.library.items.collectAsState()
+    val libIds = remember(lib) { lib.map { it.songId }.toSet() }
+    val taskBy = remember(tasks) { tasks.groupBy { it.song.id }.mapValues { it.value.last() } }
+    val dlDone = favs.count { it.id in libIds }
+    val dlActive = favs.mapNotNull { taskBy[it.id] }.filter { it.active }
+    val dlState = when {
+        favs.isNotEmpty() && dlDone == favs.size -> 2
+        dlActive.isNotEmpty() -> 1
+        else -> 0
+    }
+    val dlProgress = if (favs.isEmpty()) 0f else (dlDone + dlActive.fold(0f) { a, t -> a + t.progress }) / favs.size
     fun downloadAll() {
-        if (favs.isEmpty()) return
-        Downloads.enqueue(ctx, favs, "Liked Songs")
-        host.snack("Added ${favs.size} songs to queue")
+        val todo = favs.filter { it.id !in libIds && taskBy[it.id]?.active != true }
+        if (todo.isEmpty()) { host.snack("All songs are already downloaded"); return }
+        SettingsStore.update { it.copy(autoFavDownload = true) }   // newly liked songs are downloaded automatically
+        Downloads.enqueue(ctx, todo, "Liked Songs")
+        host.snack("Downloading ${todo.size} songs")
+    }
+    fun onDownloadClick() {
+        when (dlState) {
+            2 -> host.snack("All liked songs are downloaded")
+            1 -> {
+                dlActive.forEach { Downloads.cancel(it.id) }
+                SettingsStore.update { it.copy(autoFavDownload = false) }
+                host.snack("Download cancelled")
+            }
+            else -> downloadAll()
+        }
     }
     SongsList(
         songs = favs, modifier = Modifier.fillMaxSize(), sub = "Liked Songs",
@@ -315,7 +398,8 @@ fun FavoritesScreen(onBack: () -> Unit) {
                 title = "Liked Songs",
                 meta = "${favs.size} songs" + if (favs.isNotEmpty()) " • ${fmtTotal(favs.sumOf { it.duration })}" else "",
                 covers = favs.take(4).map { it.thumb }, heart = true,
-                onBack = onBack, onDownload = { downloadAll() },
+                onBack = onBack, onDownload = { onDownloadClick() },
+                downloadState = dlState, downloadProgress = dlProgress,
                 onShare = { shareText(ctx, "Liked Songs\n" + favs.take(60).joinToString("\n") { "${it.name} - ${it.artists}" }) },
                 onMore = { more = true },
                 onShuffle = { if (favs.isNotEmpty()) PlayerController.playShuffled(favs.map { it.toTrack() }) },

@@ -190,10 +190,6 @@ fun NowPlayingScreen(onBack: () -> Unit) {
                 IconButton(onClick = { addTo = listOf(song) }) { Icon(Icons.Filled.PlaylistAdd, "Add to playlist", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             IconButton(onClick = { host.push(Route.PlayQueue) }) { Icon(Icons.Filled.QueueMusic, "Queue", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-            IconButton(onClick = { host.push(Route.PlayQueue) }) {
-                Icon(Icons.Filled.QueueMusic, "Queue", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            IconButton(onClick = { host.push(Route.PlayQueue) }) { Icon(Icons.Filled.QueueMusic, "Queue", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             IconButton(onClick = { showLyrics = !showLyrics }) {
                 Icon(Icons.Filled.Notes, tr("Lyrics"), tint = if (showLyrics) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }

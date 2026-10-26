@@ -75,8 +75,14 @@ fun AddToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit) {
                     lists.forEach { p ->
                         Row(
                             Modifier.fillMaxWidth().clickable {
-                                Stores.addToPlaylist(p.id, songs)
-                                host.snack("Added to \"${p.name}\"")
+                                val r = Stores.addToPlaylist(p.id, songs)
+                                host.snack(
+                                    when {
+                                        r.added == 0 -> if (songs.size == 1) "Already added to \"${p.name}\"" else "These songs are already in \"${p.name}\""
+                                        r.skipped > 0 -> "Added ${r.added}, ${r.skipped} were already in \"${p.name}\""
+                                        else -> "Added to \"${p.name}\"" + if (r.autoDownload) " · downloading" else ""
+                                    }
+                                )
                                 onDismiss()
                             }.padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
