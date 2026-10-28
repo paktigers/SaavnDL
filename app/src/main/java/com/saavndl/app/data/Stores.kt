@@ -49,7 +49,9 @@ data class AppSettings(
     val lang: String = "en",
     val repo: String = DEFAULT_REPO,
     val autoUpdate: Boolean = true,
-    val homeLang: String = "hindi"
+    val homeLang: String = "hindi",
+    val spotifyId: String = "",
+    val spotifySecret: String = ""
 )
 
 object SettingsStore {
@@ -78,7 +80,9 @@ object SettingsStore {
             lang = sp.getString("lang", d.lang) ?: d.lang,
             repo = (sp.getString("repo", null) ?: d.repo).let { if (it.isBlank()) d.repo else normalizeRepo(it) },
             autoUpdate = sp.getBoolean("autoUpdate", d.autoUpdate),
-            homeLang = sp.getString("homeLang", d.homeLang) ?: d.homeLang
+            homeLang = sp.getString("homeLang", d.homeLang) ?: d.homeLang,
+            spotifyId = sp.getString("spotifyId", "") ?: "",
+            spotifySecret = sp.getString("spotifySecret", "") ?: ""
         )
         I18n.lang = _state.value.lang
     }
@@ -96,7 +100,7 @@ object SettingsStore {
             .putInt("retries", n.retries).putBoolean("embedLyrics", n.embedLyrics)
             .putBoolean("autoFavDownload", n.autoFavDownload).putString("lang", n.lang)
             .putString("repo", n.repo).putBoolean("autoUpdate", n.autoUpdate)
-            .putString("homeLang", n.homeLang).apply()
+            .putString("homeLang", n.homeLang).putString("spotifyId", n.spotifyId).putString("spotifySecret", n.spotifySecret).apply()
     }
 
     fun restoreAsked(): Boolean = sp.getBoolean("restoreAsked", false)

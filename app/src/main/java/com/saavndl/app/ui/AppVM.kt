@@ -203,6 +203,16 @@ class AppVM : ViewModel() {
     }
 
     // ------------------------------------------------------------------ Spotify import
+    private suspend fun runSpotify(list: SpList) {
+        spList = list
+        spStatus = "Matching 0/${list.tracks.size}"
+        val m = SpotifyApi.matchAll(list) { d, t -> spStatus = "Matching $d/$t" }
+        spMatches = m
+        val found = m.mapNotNull { it.song }.distinctBy { it.id }
+        if (found.isNotEmpty()) spPlaylistId = Stores.createPlaylist(list.name, found)
+        spStatus = "Matched ${found.size} of ${list.tracks.size} songs"
+    }
+
     fun importSpotify(link: String) {
         val p = SpotifyApi.parseLink(link)
         if (p == null) { spStatus = "That is not a Spotify playlist or album link"; return }
@@ -211,14 +221,32 @@ class AppVM : ViewModel() {
             spBusy = true; spList = null; spMatches = emptyList(); spPlaylistId = null
             spStatus = "Reading the Spotify ${p.first}…"
             try {
-                val list = SpotifyApi.load(p.first, p.second)
-                spList = list
-                spStatus = "Matching 0/${list.tracks.size}"
-                val m = SpotifyApi.matchAll(list) { d, t -> spStatus = "Matching $d/$t" }
-                spMatches = m
-                val found = m.mapNotNull { it.song }.distinctBy { it.id }
-                if (found.isNotEmpty()) spPlaylistId = Stores.createPlaylist(list.name, found)
-                spStatus = "Matched ${found.size} of ${list.tracks.size} songs"
+                runSpotify(SpotifyApi.load(p.first, p.second))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                spStatus = e.message ?: "Import failed"
+            } finally {
+                spBusy = false
+            }
+        }
+    }
+
+    /** Import a CSV (e.g. exported with Exportify) or a text file with one song per line - works for playlists of any size. */
+    fun importSpotifyFile(ctx: Context, uri: Uri) {
+        spJob?.cancel()
+        spJob = viewModelScope.launch {
+            spBusy = true; spList = null; spMatches = emptyList(); spPlaylistId = null
+            spStatus = "Reading the file…"
+            try {
+                val (text, name) = withContext(Dispatchers.IO) {
+                    val t = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                        ?: throw java.io.IOException("Cannot read the file")
+                    val n = ctx.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: "Imported playlist"
+                    t to n
+                }
+                runSpotify(SpotifyApi.parseFile(text, name))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

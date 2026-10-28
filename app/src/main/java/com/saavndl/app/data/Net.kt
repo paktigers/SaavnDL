@@ -32,3 +32,23 @@ fun httpGetText(url: String, timeoutMs: Int = 12000, headers: Map<String, String
         c.disconnect()
     }
 }
+
+/** Blocking form POST returning (httpCode, body). Call from Dispatchers.IO. */
+fun httpPostForm(url: String, form: String, headers: Map<String, String> = emptyMap(), timeoutMs: Int = 15000): Pair<Int, String> {
+    val c = URL(url).openConnection() as HttpURLConnection
+    try {
+        c.requestMethod = "POST"
+        c.doOutput = true
+        c.connectTimeout = timeoutMs
+        c.readTimeout = timeoutMs
+        c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        c.setRequestProperty("User-Agent", "SaavnDL/1.0 (Android)")
+        headers.forEach { (k, v) -> c.setRequestProperty(k, v) }
+        c.outputStream.use { it.write(form.toByteArray()) }
+        val code = c.responseCode
+        val body = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+        return code to body
+    } finally {
+        c.disconnect()
+    }
+}

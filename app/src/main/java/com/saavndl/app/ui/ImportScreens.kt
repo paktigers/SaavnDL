@@ -1,5 +1,8 @@
 package com.saavndl.app.ui
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -63,6 +66,9 @@ fun SpotifyImportScreen(initial: String, vm: AppVM, onBack: () -> Unit) {
     val host = LocalHost.current
     var link by remember { mutableStateOf(initial) }
     var showMissing by remember { mutableStateOf(false) }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) vm.importSpotifyFile(ctx, uri)
+    }
 
     LaunchedEffect(initial) {
         if (initial.isNotBlank() && vm.spList == null && !vm.spBusy) vm.importSpotify(initial)
@@ -81,13 +87,21 @@ fun SpotifyImportScreen(initial: String, vm: AppVM, onBack: () -> Unit) {
                 value = link, onValueChange = { link = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                 label = { Text("Spotify playlist or album link") }, shape = RoundedCornerShape(16.dp)
             )
-            Button(enabled = !vm.spBusy && link.isNotBlank(), onClick = { vm.importSpotify(link.trim()) }) { Text("Import") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(enabled = !vm.spBusy && link.isNotBlank(), onClick = { vm.importSpotify(link.trim()) }) { Text("Import") }
+                OutlinedButton(enabled = !vm.spBusy, onClick = { filePicker.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "*/*")) }) {
+                    Text("From CSV / text file")
+                }
+            }
+            val note = vm.spList?.note.orEmpty()
+            if (note.isNotBlank()) Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             if (vm.spStatus.isNotBlank()) Text(vm.spStatus, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
             if (vm.spBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (!vm.spBusy && vm.spList == null && vm.spStatus.isBlank()) {
                 Text(
                     "Paste the link of a public Spotify playlist (Share → Copy link). Songs are matched on JioSaavn, saved as a playlist " +
-                        "in your Library, and can be downloaded. Spotify only shows the first part of very large playlists to apps without login.",
+                        "in your Library, and can be downloaded. Playlists with more than 100 songs: add your free Spotify Client ID/Secret in " +
+                        "Settings → Spotify, or use \"From CSV / text file\" (export your playlist with Exportify).",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

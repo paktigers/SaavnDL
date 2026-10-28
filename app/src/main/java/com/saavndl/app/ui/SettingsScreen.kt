@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -142,6 +143,9 @@ fun SettingsScreen(vm: AppVM) {
     val scope = rememberCoroutineScope()
     var url by remember(s.baseUrl) { mutableStateOf(s.baseUrl) }
     var apiStatus by remember { mutableStateOf("") }
+    var spId by remember(s.spotifyId) { mutableStateOf(s.spotifyId) }
+    var spSecret by remember(s.spotifySecret) { mutableStateOf(s.spotifySecret) }
+    var spSaved by remember { mutableStateOf("") }
     var showLog by remember { mutableStateOf(false) }
     val mp3Ok = remember { Mp3Encoder.isAvailable() }
     val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "?" }
@@ -213,6 +217,27 @@ fun SettingsScreen(vm: AppVM) {
             if (apiStatus.isNotBlank()) Text(apiStatus, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("Public instances can be slow or rate-limited. You can deploy the jiosaavn-api project yourself (e.g. on Vercel) and paste its URL here.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        SectionCard("Spotify", Icons.Filled.Link) {
+            Text(
+                "Optional. Without these, Spotify playlists import only their first 100 songs. With your own free Spotify app " +
+                    "(developer.spotify.com/dashboard → Create app) the whole playlist is imported, however long it is.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedTextField(value = spId, onValueChange = { spId = it }, singleLine = true, label = { Text("Client ID") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+            OutlinedTextField(
+                value = spSecret, onValueChange = { spSecret = it }, singleLine = true, label = { Text("Client Secret") },
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = {
+                    SettingsStore.update { it.copy(spotifyId = spId.trim(), spotifySecret = spSecret.trim()) }
+                    spSaved = if (spId.isBlank() || spSecret.isBlank()) "Cleared" else "Saved"
+                }) { Text(tr("Save")) }
+            }
+            if (spSaved.isNotBlank()) Text(spSaved, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         SectionCard("Batch import", Icons.Filled.FileUpload) {
