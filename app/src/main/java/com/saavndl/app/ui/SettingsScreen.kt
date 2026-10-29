@@ -71,6 +71,7 @@ import com.saavndl.app.data.AudioFormat
 import com.saavndl.app.data.Backup
 import com.saavndl.app.data.SaavnApi
 import com.saavndl.app.data.SettingsStore
+import com.saavndl.app.data.SpotifyAuth
 import com.saavndl.app.data.fmtSize
 import com.saavndl.app.data.tr
 import com.saavndl.app.download.MediaSaver
@@ -144,7 +145,8 @@ fun SettingsScreen(vm: AppVM) {
     var url by remember(s.baseUrl) { mutableStateOf(s.baseUrl) }
     var apiStatus by remember { mutableStateOf("") }
     var spId by remember(s.spotifyId) { mutableStateOf(s.spotifyId) }
-    var spSecret by remember(s.spotifySecret) { mutableStateOf(s.spotifySecret) }
+    val spConnected by SpotifyAuth.connected.collectAsState()
+    val spMsg by SpotifyAuth.message.collectAsState()
     var spSaved by remember { mutableStateOf("") }
     var showLog by remember { mutableStateOf(false) }
     val mp3Ok = remember { Mp3Encoder.isAvailable() }
@@ -221,23 +223,33 @@ fun SettingsScreen(vm: AppVM) {
 
         SectionCard("Spotify", Icons.Filled.Link) {
             Text(
-                "Optional. Without these, Spotify playlists import only their first 100 songs. With your own free Spotify app " +
-                    "(developer.spotify.com/dashboard → Create app) the whole playlist is imported, however long it is.",
+                "Import every song (more than 100) of YOUR Spotify playlists:\n" +
+                    "1. Open developer.spotify.com/dashboard and create an app (tick \"Web API\").\n" +
+                    "2. In that app's settings add this Redirect URI:  ${SpotifyAuth.REDIRECT}\n" +
+                    "3. Paste its Client ID below, tap Save, then Connect Spotify.\n\n" +
+                    "Spotify only lets apps read playlists you own or collaborate on. For someone else's playlist, first copy its songs into your own playlist.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             OutlinedTextField(value = spId, onValueChange = { spId = it }, singleLine = true, label = { Text("Client ID") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
-            OutlinedTextField(
-                value = spSecret, onValueChange = { spSecret = it }, singleLine = true, label = { Text("Client Secret") },
-                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)
-            )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = {
-                    SettingsStore.update { it.copy(spotifyId = spId.trim(), spotifySecret = spSecret.trim()) }
-                    spSaved = if (spId.isBlank() || spSecret.isBlank()) "Cleared" else "Saved"
+                OutlinedButton(onClick = {
+                    SettingsStore.update { it.copy(spotifyId = spId.trim()) }
+                    spSaved = "Saved"
                 }) { Text(tr("Save")) }
+                if (spConnected) {
+                    Button(onClick = { SpotifyAuth.disconnect() }) { Text("Disconnect") }
+                } else {
+                    Button(onClick = {
+                        if (spId.isBlank()) { host.snack("Paste your Spotify Client ID first") }
+                        else {
+                            SettingsStore.update { it.copy(spotifyId = spId.trim()) }
+                            SpotifyAuth.start(ctx, spId)
+                        }
+                    }) { Text("Connect Spotify") }
+                }
             }
-            if (spSaved.isNotBlank()) Text(spSaved, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val status = if (spConnected && spMsg.isBlank()) "Connected to Spotify." else spMsg.ifBlank { spSaved }
+            if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodySmall, color = if (spConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         SectionCard("Batch import", Icons.Filled.FileUpload) {

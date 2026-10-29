@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.saavndl.app.data.LibrarySync
+import com.saavndl.app.data.SpotifyAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.saavndl.app.data.SettingsStore
@@ -38,7 +39,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) incoming = extractLink(intent)
+        if (savedInstanceState == null && !handleSpotifyCallback(intent)) incoming = extractLink(intent)
         setContent {
             val s by SettingsStore.state.collectAsState()
             val dir = if (s.lang == "ur") LayoutDirection.Rtl else LayoutDirection.Ltr
@@ -64,7 +65,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        extractLink(intent)?.let { incoming = it }
+        if (!handleSpotifyCallback(intent)) extractLink(intent)?.let { incoming = it }
+    }
+
+    /** The browser returns here after the Spotify login: saavndl://callback?code=... */
+    private fun handleSpotifyCallback(i: Intent?): Boolean {
+        val d = i?.data ?: return false
+        if (d.scheme != "saavndl" || d.host != "callback") return false
+        lifecycleScope.launch { SpotifyAuth.handleRedirect(d) }
+        return true
     }
 
     private fun extractLink(i: Intent?): String? {

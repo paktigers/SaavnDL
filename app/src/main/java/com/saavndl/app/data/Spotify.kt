@@ -59,37 +59,33 @@ object SpotifyApi {
     }
 
     /**
-     * Loads a playlist/album. With a Spotify Client ID + Secret (Settings) the official Web API is used, which pages through
-     * EVERY song. Without it only the public embed is available, and Spotify limits that to the first 100 songs.
+     * Loads a playlist/album. When your Spotify account is connected (Settings -> Spotify) the official Web API is used and pages
+     * through EVERY song of playlists you own or collaborate on. Otherwise only the public embed is available, which Spotify limits
+     * to the first 100 songs.
      */
     suspend fun load(type: String, id: String): SpList {
-        val st = SettingsStore.state.value
-        var apiProblem = ""
-        if (type == "playlist" && st.spotifyId.isNotBlank() && st.spotifySecret.isNotBlank()) {
-            try {
-                return loadViaApi(id, st.spotifyId.trim(), st.spotifySecret.trim())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                apiProblem = e.message.orEmpty()
+        var problem = ""
+        if (type == "playlist") {
+            if (SpotifyAuth.connected.value) {
+                try {
+                    return loadViaApi(id)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    problem = e.message.orEmpty()
+                }
+            } else if (SettingsStore.state.value.spotifyId.isNotBlank()) {
+                problem = "Connect your Spotify account in Settings → Spotify to import every song of your own playlists."
             }
         }
         val embed = loadEmbed(type, id)
         val note = when {
-            apiProblem.isNotBlank() -> "$apiProblem Only the songs Spotify shows publicly (up to 100) were imported."
+            problem.isNotBlank() -> "$problem Only the songs Spotify shows publicly (up to 100) were imported."
             type == "playlist" && embed.tracks.size >= 100 ->
-                "Spotify only shows the first 100 songs without an account. To import ALL songs add your free Spotify Client ID and Secret in Settings → Spotify, or import a CSV file (for example from Exportify)."
+                "Spotify only shows the first 100 songs without logging in. For every song of a playlist you own, connect your Spotify account in Settings → Spotify, or import a CSV file."
             else -> ""
         }
         return embed.copy(note = note)
-    }
-
-    private suspend fun token(clientId: String, secret: String): String = withContext(Dispatchers.IO) {
-        val basic = android.util.Base64.encodeToString("$clientId:$secret".toByteArray(), android.util.Base64.NO_WRAP)
-        val (code, body) = httpPostForm("https://accounts.spotify.com/api/token", "grant_type=client_credentials", mapOf("Authorization" to "Basic $basic"))
-        if (code == 400 || code == 401) throw IOException("Spotify rejected your Client ID / Secret. Please check them in Settings.")
-        if (code !in 200..299) throw IOException("Spotify login failed (HTTP $code).")
-        JSONObject(body).getString("access_token")
     }
 
     private suspend fun apiGet(url: String, token: String): Pair<Int, String> = withContext(Dispatchers.IO) {
@@ -98,26 +94,29 @@ object SpotifyApi {
         r
     }
 
-    private suspend fun loadViaApi(id: String, clientId: String, secret: String): SpList {
-        val tok = token(clientId, secret)
+    private suspend fun loadViaApi(id: String): SpList {
+        val tok = SpotifyAuth.accessToken() ?: throw IOException("Your Spotify login expired. Connect again in Settings → Spotify.")
         val (c0, b0) = apiGet("https://api.spotify.com/v1/playlists/$id?fields=name", tok)
-        if (c0 == 404) throw IOException("Spotify says this playlist is private or not available to apps (HTTP 404).")
-        if (c0 == 403) throw IOException("Spotify does not let this app read that playlist (HTTP 403).")
-        if (c0 !in 200..299) throw IOException("Spotify returned HTTP $c0.")
-        val name = JSONObject(b0).optString("name").ifBlank { "Spotify playlist" }
+        if (c0 == 404) throw IOException("Spotify says this playlist is private or not available (HTTP 404).")
+        if (c0 == 401) throw IOException("Your Spotify login expired. Connect again in Settings → Spotify.")
+        if (c0 !in 200..299 && c0 != 403) throw IOException("Spotify returned HTTP $c0.")
+        val name = if (c0 == 403) "Spotify playlist" else JSONObject(b0).optString("name").ifBlank { "Spotify playlist" }
         val tracks = ArrayList<SpTrack>()
         var offset = 0
-        var path = "tracks"
+        var path = "items"
         while (offset <= 12000) {
-            val (c, b) = apiGet("https://api.spotify.com/v1/playlists/$id/$path?limit=100&offset=$offset", tok)
-            if ((c == 404 || c == 410) && path == "tracks" && offset == 0) { path = "items"; continue }   // newer endpoint name
-            if (c == 403) throw IOException("Spotify does not let this app read the songs of that playlist (HTTP 403). It may be private.")
+            val (c, b) = apiGet("https://api.spotify.com/v1/playlists/$id/$path?limit=50&offset=$offset", tok)
+            if ((c == 404 || c == 410) && path == "items" && offset == 0) { path = "tracks"; continue }   // older endpoint name
+            if (c == 403) throw IOException(
+                "Spotify only lets this app read playlists that you own or collaborate on (Spotify's 2026 rule for new apps). " +
+                    "To import someone else's playlist, first copy its songs into your own playlist, then import your copy."
+            )
             if (c !in 200..299) throw IOException("Spotify returned HTTP $c.")
             val root = JSONObject(b)
             val arr = root.optJSONArray("items") ?: break
             for (i in 0 until arr.length()) {
                 val row = arr.optJSONObject(i) ?: continue
-                val t = row.optJSONObject("track") ?: row.optJSONObject("item") ?: continue
+                val t = row.optJSONObject("item") ?: row.optJSONObject("track") ?: continue
                 val title = t.str("name")
                 if (title.isBlank()) continue
                 tracks.add(SpTrack(title, t.optJSONArray("artists").names().joinToString(", "), t.str("duration_ms").toDoubleOrNull()?.toLong() ?: 0L))

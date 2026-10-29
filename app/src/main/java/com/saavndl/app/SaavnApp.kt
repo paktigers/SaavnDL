@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import com.saavndl.app.data.AppLog
 import com.saavndl.app.data.Recents
 import com.saavndl.app.data.SettingsStore
+import com.saavndl.app.data.SpotifyAuth
 import com.saavndl.app.data.Stores
 import com.saavndl.app.player.PlayerController
 
@@ -21,6 +22,7 @@ class SaavnApp : Application() {
         instance = this
         AppLog.init(this)
         SettingsStore.init(this)
+        SpotifyAuth.init(this)
         Recents.init(this)
         Stores.init(this)
         PlayerController.init(this)

@@ -99,9 +99,9 @@ fun SpotifyImportScreen(initial: String, vm: AppVM, onBack: () -> Unit) {
             if (vm.spBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (!vm.spBusy && vm.spList == null && vm.spStatus.isBlank()) {
                 Text(
-                    "Paste the link of a public Spotify playlist (Share → Copy link). Songs are matched on JioSaavn, saved as a playlist " +
-                        "in your Library, and can be downloaded. Playlists with more than 100 songs: add your free Spotify Client ID/Secret in " +
-                        "Settings → Spotify, or use \"From CSV / text file\" (export your playlist with Exportify).",
+                    "Paste the link of a Spotify playlist (Share → Copy link). Songs are matched on JioSaavn, saved as a playlist in your Library, " +
+                        "and can be downloaded. Without logging in Spotify shows only the first 100 songs. For playlists with more songs, connect your " +
+                        "Spotify account in Settings → Spotify (works for playlists you own), or use \"From CSV / text file\".",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
