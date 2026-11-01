@@ -129,7 +129,7 @@ fun LibraryScreen() {
             EmptyState(Icons.Filled.LibraryMusic, tr("Nothing here yet"), "Create a playlist, like songs or download some music.")
         } else if (grid) {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(),
+                columns = GridCells.Adaptive(150.dp), modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(entries, key = { it.key }) { e ->

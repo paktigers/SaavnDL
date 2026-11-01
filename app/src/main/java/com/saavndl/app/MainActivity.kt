@@ -28,7 +28,13 @@ import com.saavndl.app.data.SpotifyAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.saavndl.app.data.SettingsStore
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import com.saavndl.app.ui.AppRoot
+import com.saavndl.app.ui.DeviceMode
+import com.saavndl.app.ui.LocalDeviceMode
+import com.saavndl.app.ui.resolveDeviceMode
+import com.saavndl.app.ui.uiScaleFor
 import com.saavndl.app.ui.AppVM
 import com.saavndl.app.ui.SaavnTheme
 
@@ -43,8 +49,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             val s by SettingsStore.state.collectAsState()
             val dir = if (s.lang == "ur") LayoutDirection.Rtl else LayoutDirection.Ltr
-            CompositionLocalProvider(LocalLayoutDirection provides dir) {
-                SaavnTheme(s.theme) {
+            val mode = resolveDeviceMode(s.displayMode)
+            val base = LocalDensity.current
+            val scale = uiScaleFor(s.uiScale, mode)
+            CompositionLocalProvider(
+                LocalLayoutDirection provides dir,
+                LocalDeviceMode provides mode,
+                LocalDensity provides Density(base.density * scale, base.fontScale)
+            ) {
+                // car panels are used day and night: default to the dark theme there
+                SaavnTheme(if (s.theme == "system" && mode == DeviceMode.CAR) "dark" else s.theme) {
                     NotificationPermission()
                     AppRoot(vm, incoming) { incoming = null }
                 }

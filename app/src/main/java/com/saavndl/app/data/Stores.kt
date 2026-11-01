@@ -51,7 +51,9 @@ data class AppSettings(
     val autoUpdate: Boolean = true,
     val homeLang: String = "hindi",
     val spotifyId: String = "",
-    val spotifySecret: String = ""
+    val spotifySecret: String = "",
+    val displayMode: String = "auto",
+    val uiScale: Int = 0
 )
 
 object SettingsStore {
@@ -82,7 +84,9 @@ object SettingsStore {
             autoUpdate = sp.getBoolean("autoUpdate", d.autoUpdate),
             homeLang = sp.getString("homeLang", d.homeLang) ?: d.homeLang,
             spotifyId = sp.getString("spotifyId", "") ?: "",
-            spotifySecret = sp.getString("spotifySecret", "") ?: ""
+            spotifySecret = sp.getString("spotifySecret", "") ?: "",
+            displayMode = sp.getString("displayMode", d.displayMode) ?: d.displayMode,
+            uiScale = sp.getInt("uiScale", d.uiScale)
         )
         I18n.lang = _state.value.lang
     }
@@ -100,7 +104,8 @@ object SettingsStore {
             .putInt("retries", n.retries).putBoolean("embedLyrics", n.embedLyrics)
             .putBoolean("autoFavDownload", n.autoFavDownload).putString("lang", n.lang)
             .putString("repo", n.repo).putBoolean("autoUpdate", n.autoUpdate)
-            .putString("homeLang", n.homeLang).putString("spotifyId", n.spotifyId).putString("spotifySecret", n.spotifySecret).apply()
+            .putString("homeLang", n.homeLang).putString("spotifyId", n.spotifyId).putString("spotifySecret", n.spotifySecret)
+            .putString("displayMode", n.displayMode).putInt("uiScale", n.uiScale).apply()
     }
 
     fun restoreAsked(): Boolean = sp.getBoolean("restoreAsked", false)

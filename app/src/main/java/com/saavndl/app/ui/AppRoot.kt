@@ -6,6 +6,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -16,6 +21,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -90,56 +98,83 @@ fun AppRoot(vm: AppVM, incoming: String?, onConsumed: () -> Unit) {
     BackHandler(enabled = stack.isNotEmpty()) { stack.removeAt(stack.lastIndex) }
 
     CompositionLocalProvider(LocalHost provides host) {
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
-            snackbarHost = { SnackbarHost(snack) },
-            bottomBar = {
-                Column {
-                    MiniPlayer()
-                    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                        NavigationBarItem(selected = tab == 0, onClick = { stack.clear(); tab = 0 },
-                            icon = { Icon(Icons.Filled.Search, null) }, label = { Text(tr("Discover")) })
-                        NavigationBarItem(selected = tab == 1, onClick = { stack.clear(); tab = 1 },
-                            icon = { Icon(Icons.Filled.LibraryMusic, null) }, label = { Text(tr("Library")) })
-                        NavigationBarItem(selected = tab == 2, onClick = { stack.clear(); tab = 2 },
-                            icon = {
-                                BadgedBox(badge = { if (activeCount > 0) Badge { Text("$activeCount") } }) {
-                                    Icon(Icons.Filled.CloudDownload, null)
-                                }
-                            }, label = { Text(tr("Downloads")) })
-                        NavigationBarItem(selected = tab == 3, onClick = { stack.clear(); tab = 3 },
-                            icon = { Icon(Icons.Filled.Settings, null) }, label = { Text(tr("Settings")) })
-                    }
+        val mode = LocalDeviceMode.current
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // phone: bottom bar | tablet and car: navigation rail on the left, and in landscape a permanent "now playing" pane on the right
+            val wide = mode != DeviceMode.PHONE && maxWidth >= 600.dp
+            val pane = wide && maxWidth > maxHeight && maxWidth >= 700.dp
+            val paneWidth = (maxWidth * 0.36f).coerceIn(300.dp, 480.dp)
+            Scaffold(
+                containerColor = MaterialTheme.colorScheme.background,
+                snackbarHost = { SnackbarHost(snack) },
+                bottomBar = {
+                    if (!wide) {
+                        Column {
+                            MiniPlayer()
+                            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                                NavigationBarItem(selected = tab == 0, onClick = { stack.clear(); tab = 0 },
+                                    icon = { Icon(Icons.Filled.Search, null) }, label = { Text(tr("Discover")) })
+                                NavigationBarItem(selected = tab == 1, onClick = { stack.clear(); tab = 1 },
+                                    icon = { Icon(Icons.Filled.LibraryMusic, null) }, label = { Text(tr("Library")) })
+                                NavigationBarItem(selected = tab == 2, onClick = { stack.clear(); tab = 2 },
+                                    icon = {
+                                        BadgedBox(badge = { if (activeCount > 0) Badge { Text("$activeCount") } }) {
+                                            Icon(Icons.Filled.CloudDownload, null)
+                                        }
+                                    }, label = { Text(tr("Downloads")) })
+                                NavigationBarItem(selected = tab == 3, onClick = { stack.clear(); tab = 3 },
+                                    icon = { Icon(Icons.Filled.Settings, null) }, label = { Text(tr("Settings")) })
+                            }
+                        }
+                    } else if (!pane) MiniPlayer()
                 }
-            }
-        ) { pad ->
-            Box(Modifier.padding(pad).fillMaxSize()) {
-                if (stack.isNotEmpty()) {
-                    val r = stack.last()
-                    val back = { stack.removeAt(stack.lastIndex); Unit }
-                    key(r) {
-                        when (r) {
-                            is Route.NowPlaying -> NowPlayingScreen(back)
-                            is Route.Playlist -> PlaylistScreen(r.id, back)
-                            is Route.Favorites -> FavoritesScreen(back)
-                            is Route.Downloaded -> DownloadedScreen(back)
-                            is Route.PlayQueue -> PlayQueueScreen(back)
-                            is Route.Favorites -> FavoritesScreen(back)
-                            is Route.Downloaded -> DownloadedScreen(back)
-                            is Route.PlayQueue -> PlayQueueScreen(back)
-                            is Route.Favorites -> FavoritesScreen(back)
-                            is Route.Downloaded -> DownloadedScreen(back)
-                            is Route.PlayQueue -> PlayQueueScreen(back)
-                            is Route.SpotifyImport -> SpotifyImportScreen(r.link, vm, back)
-                            is Route.ImportDevice -> ImportDeviceScreen(back)
-                            else -> DetailScreen(r, back)
+            ) { pad ->
+                Row(Modifier.padding(pad).fillMaxSize()) {
+                    if (wide) {
+                        NavigationRail(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                            Spacer(Modifier.weight(1f))
+                            NavigationRailItem(selected = tab == 0, onClick = { stack.clear(); tab = 0 },
+                                icon = { Icon(Icons.Filled.Search, null) }, label = { Text(tr("Discover")) })
+                            NavigationRailItem(selected = tab == 1, onClick = { stack.clear(); tab = 1 },
+                                icon = { Icon(Icons.Filled.LibraryMusic, null) }, label = { Text(tr("Library")) })
+                            NavigationRailItem(selected = tab == 2, onClick = { stack.clear(); tab = 2 },
+                                icon = {
+                                    BadgedBox(badge = { if (activeCount > 0) Badge { Text("$activeCount") } }) {
+                                        Icon(Icons.Filled.CloudDownload, null)
+                                    }
+                                }, label = { Text(tr("Downloads")) })
+                            NavigationRailItem(selected = tab == 3, onClick = { stack.clear(); tab = 3 },
+                                icon = { Icon(Icons.Filled.Settings, null) }, label = { Text(tr("Settings")) })
+                            Spacer(Modifier.weight(1f))
                         }
                     }
-                } else when (tab) {
-                    0 -> SearchScreen(vm)
-                    1 -> LibraryScreen()
-                    2 -> QueueScreen()
-                    else -> SettingsScreen(vm)
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        if (stack.isNotEmpty()) {
+                            val r = stack.last()
+                            val back = { stack.removeAt(stack.lastIndex); Unit }
+                            key(r) {
+                                when (r) {
+                                    is Route.NowPlaying -> NowPlayingScreen(back)
+                                    is Route.Playlist -> PlaylistScreen(r.id, back)
+                                    is Route.Favorites -> FavoritesScreen(back)
+                                    is Route.Downloaded -> DownloadedScreen(back)
+                                    is Route.PlayQueue -> PlayQueueScreen(back)
+                                    is Route.SpotifyImport -> SpotifyImportScreen(r.link, vm, back)
+                                    is Route.ImportDevice -> ImportDeviceScreen(back)
+                                    else -> DetailScreen(r, back)
+                                }
+                            }
+                        } else when (tab) {
+                            0 -> SearchScreen(vm)
+                            1 -> LibraryScreen()
+                            2 -> QueueScreen()
+                            else -> SettingsScreen(vm)
+                        }
+                    }
+                    if (pane) {
+                        VerticalDivider()
+                        Box(Modifier.width(paneWidth).fillMaxHeight()) { NowPlayingScreen({ }, embedded = true) }
+                    }
                 }
             }
         }

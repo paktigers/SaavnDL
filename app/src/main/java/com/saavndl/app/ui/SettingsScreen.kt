@@ -201,6 +201,18 @@ fun SettingsScreen(vm: AppVM) {
             ChipRow(listOf("10" to 10, "20" to 20, "30" to 30, "50" to 50), s.limit) { n -> SettingsStore.update { it.copy(limit = n) } }
         }
 
+        SectionCard("Display", Icons.Filled.Palette) {
+            Text("Detected: ${detectDeviceMode(ctx).name.lowercase().replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.bodyMedium)
+            Label("Layout")
+            ChipRow(listOf("Auto" to "auto", "Phone" to "phone", "Tablet" to "tablet", "Car" to "car"), s.displayMode) { m -> SettingsStore.update { it.copy(displayMode = m) } }
+            Label("Interface size")
+            ChipRow(listOf("Auto" to 0, "Small" to 1, "Normal" to 2, "Large" to 3, "Extra large" to 4), s.uiScale) { n -> SettingsStore.update { it.copy(uiScale = n) } }
+            Text(
+                "Auto picks the best layout for this device: bottom bar on phones, side menu with a player panel on tablets, and larger buttons on car screens.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
         SectionCard("API server", Icons.Filled.Language) {
             OutlinedTextField(value = url, onValueChange = { url = it }, singleLine = true, label = { Text("Base URL") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

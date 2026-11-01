@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.QueueMusic
@@ -75,7 +76,7 @@ import com.saavndl.app.player.PlayerController
 import kotlinx.coroutines.delay
 
 @Composable
-fun NowPlayingScreen(onBack: () -> Unit) {
+fun NowPlayingScreen(onBack: () -> Unit, embedded: Boolean = false) {
     val track by PlayerController.current.collectAsState()
     val playing by PlayerController.playing.collectAsState()
     val loading by PlayerController.loading.collectAsState()
@@ -92,7 +93,8 @@ fun NowPlayingScreen(onBack: () -> Unit) {
 
     val tr0 = track
     if (tr0 == null) {
-        LaunchedEffect(Unit) { onBack() }
+        if (embedded) EmptyState(Icons.Filled.MusicNote, "Nothing playing", "Pick a song and it shows up here.", Modifier.fillMaxSize())
+        else LaunchedEffect(Unit) { onBack() }
         return
     }
     val song = tr0.song
@@ -118,7 +120,7 @@ fun NowPlayingScreen(onBack: () -> Unit) {
 
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Filled.KeyboardArrowDown, "Close", Modifier.size(30.dp)) }
+            if (!embedded) IconButton(onClick = onBack) { Icon(Icons.Filled.KeyboardArrowDown, "Close", Modifier.size(30.dp)) } else Spacer(Modifier.size(48.dp))
             Text(tr("Now playing"), Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleSmall)
             Box {
                 IconButton(onClick = { menu = true }) {
